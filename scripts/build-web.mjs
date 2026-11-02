@@ -24,6 +24,8 @@ await fs.mkdir(path.join(out, 'fonts'), { recursive: true });
 
 await Promise.all([
   fs.copyFile(r('renderer/app.js'), path.join(out, 'app.js')),
+  fs.copyFile(r('renderer/i18n.js'), path.join(out, 'i18n.js')),
+  fs.copyFile(r('renderer/i18n-ar.js'), path.join(out, 'i18n-ar.js')),
   fs.copyFile(r('renderer/store-flags.js'), path.join(out, 'store-flags.js')),
   fs.copyFile(r('renderer/report.js'), path.join(out, 'report.js')),
   fs.copyFile(r('renderer/speech-text.js'), path.join(out, 'speech-text.js')),
@@ -31,8 +33,7 @@ await Promise.all([
   fs.copyFile(r('renderer/save-queue.js'), path.join(out, 'save-queue.js')),
   fs.copyFile(r('src/lease.js'), path.join(out, 'lease.js')),
   fs.copyFile(r('renderer/styles.css'), path.join(out, 'styles.css')),
-  fs.copyFile(r('renderer/fonts/Almarai-Regular.woff2'), path.join(out, 'fonts/Almarai-Regular.woff2')),
-  fs.copyFile(r('renderer/fonts/Almarai-Bold.woff2'), path.join(out, 'fonts/Almarai-Bold.woff2')),
+  fs.copyFile(r('renderer/fonts/ReadexPro-Arabic.woff2'), path.join(out, 'fonts/ReadexPro-Arabic.woff2')),
   fs.copyFile(r('renderer/fonts/OFL.txt'), path.join(out, 'fonts/OFL.txt')),
   fs.copyFile(r('build/icon.png'), path.join(out, 'icon.png')),
   fs.copyFile(r('LICENSE'), path.join(out, 'LICENSE.txt')),
