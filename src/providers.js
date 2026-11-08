@@ -380,6 +380,8 @@ function replyWriter(onDelta) {
 // the app is in the background, so these are counted while it's open.
 const RUN_RECONNECT_MS = [500, 1000, 2000, 4000, 8000, 15000, 15000, 15000];
 const RUN_FINISHED = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
+// How often a run whose live events are gone is checked on.
+const STATUS_POLL_MS = 3000;
 
 // Why Hermes ended a turn before the task was done (turn_exit_reason), in words.
 function exitReason(reason) {
@@ -493,6 +495,60 @@ const hermesProvider = (doFetch = (...args) => fetch(...args)) => {
       return { event: `run.${st.status}`, ...st };
     };
 
+    // The questions already passed on (live, or from the run's status).
+    const asked = new Set();
+    const ask = (a) => {
+      const key = a.approvalId || `${a.command}|${a.description}`;
+      if (asked.has(key)) return;
+      asked.add(key);
+      onInfo(a);
+    };
+    const approvalInfo = (evt) => ({
+      kind: 'approval',
+      runId: evt.run_id || runId,
+      approvalId: evt.request_id || evt.prompt_id || null,
+      // Newer Hermes answers only the exact turn that asked (see approve()).
+      generation: Number.isInteger(evt.execution_generation) ? evt.execution_generation : null,
+      command: evt.command || '',
+      description: evt.description || '',
+      choices: Array.isArray(evt.choices) && evt.choices.length ? evt.choices : ['once', 'deny']
+    });
+
+    // Hermes keeps a run's live events only a few minutes while nobody
+    // listens (the phone in the background), and the run goes on. Then the
+    // run is followed by its status until it ends: its questions still show,
+    // and the reply comes whole with the end.
+    const followStatus = async () => {
+      onInfo({ kind: 'status', text: 'Hermes is still working…' });
+      let fails = 0;
+      for (;;) {
+        let st;
+        try {
+          const res = await doFetch(base, { headers, signal });
+          if (res.status === 404) throw new Error('Hermes no longer has this run (was it restarted?). Ask again to get an answer.');
+          if (!res.ok) throw await hermesError(res);
+          st = await res.json();
+          fails = 0;
+        } catch (err) {
+          if ((signal && signal.aborted) || !isNetworkError(err) || fails >= RUN_RECONNECT_MS.length) throw err;
+          await wait(RUN_RECONNECT_MS[fails++], signal);
+          continue;
+        }
+        if (RUN_FINISHED.has(st.status)) {
+          missed = true;
+          onInfo({ kind: 'status', text: '' });
+          return { event: `run.${st.status}`, ...st };
+        }
+        // Newer Hermes: the question in `pending_controls`, with the turn it
+        // belongs to (taken first); older: in `approval`.
+        for (const p of Array.isArray(st.pending_controls) ? st.pending_controls : []) {
+          if (p && p.kind === 'approval') ask(approvalInfo(p));
+        }
+        if (st.approval && typeof st.approval === 'object') ask(approvalInfo(st.approval));
+        await wait(cfg.statusPollMs || STATUS_POLL_MS, signal);
+      }
+    };
+
     const handle = (evt) => {
       switch (evt.event) {
         case 'message.delta':
@@ -512,16 +568,7 @@ const hermesProvider = (doFetch = (...args) => fetch(...args)) => {
           onInfo({ kind: 'tool', id: evt.tool_call_id, tool: evt.tool, label: evt.tool, status: 'completed' });
           return null;
         case 'approval.request':
-          onInfo({
-            kind: 'approval',
-            runId: evt.run_id || runId,
-            approvalId: evt.request_id || null,
-            // Newer Hermes answers only the exact turn that asked (see approve()).
-            generation: Number.isInteger(evt.execution_generation) ? evt.execution_generation : null,
-            command: evt.command || '',
-            description: evt.description || '',
-            choices: Array.isArray(evt.choices) && evt.choices.length ? evt.choices : ['once', 'deny']
-          });
+          ask(approvalInfo(evt));
           return null;
         case 'run.queued':
           onInfo({ kind: 'status', text: String(evt.message || 'Waiting for Hermes to start…') });
@@ -554,8 +601,8 @@ const hermesProvider = (doFetch = (...args) => fetch(...args)) => {
             signal
           });
           if (res.status === 404) {
-            end = await fromStatus();
-            if (!end) throw new Error('Hermes stopped sending this run\'s progress.');
+            // Its live events are gone: finished meanwhile, or still going.
+            end = (await fromStatus()) || (await followStatus());
             break;
           }
           if (!res.ok) throw await hermesError(res);

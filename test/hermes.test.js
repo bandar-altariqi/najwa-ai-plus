@@ -582,3 +582,50 @@ test('Hermes approvals: the turn\'s generation is read from the question', async
   // Both ways Hermes asks (runs and the chat stream) keep it.
   assert.strictEqual((src.match(/generation: Number\.isInteger\(evt\.execution_generation\) \? evt\.execution_generation : null/g) || []).length, 2);
 });
+
+// Hermes keeps a run's live events only ~5 minutes while nobody listens
+// (gateway/platforms/api_server_runs.py, _RUN_STREAM_TTL): a phone in the
+// background came back to "not found" for a run that was still going.
+test('Hermes runs: live events gone while the run goes on: followed by its status, questions included', async () => {
+  const seen = { events: 0, polls: 0 };
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      const send = (status, data) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
+      if (req.method === 'POST' && req.url === '/v1/runs') return send(202, { run_id: 'run_7', status: 'started' });
+      if (req.url === '/v1/runs/run_7/events') {
+        seen.events++;
+        return send(404, { error: { message: 'Run not found: run_7' } });
+      }
+      if (req.url === '/v1/runs/run_7') {
+        seen.polls++;
+        if (seen.polls < 3) return send(200, { object: 'hermes.run', run_id: 'run_7', status: 'running' });
+        if (seen.polls < 5) {
+          // Older Hermes's question, and newer Hermes's: shown once.
+          return send(200, { object: 'hermes.run', run_id: 'run_7', status: 'waiting_for_approval',
+            approval: { request_id: 'req_1', command: 'rm -rf build/', description: 'clean the build', choices: ['once', 'deny'] },
+            pending_controls: [{ kind: 'approval', prompt_id: 'req_1', execution_generation: 4, command: 'rm -rf build/', description: 'clean the build', choices: ['once', 'deny'] }] });
+        }
+        return send(200, { object: 'hermes.run', run_id: 'run_7', status: 'completed', output: 'Built and installed the launcher.' });
+      }
+      send(404, { error: { message: 'not found' } });
+    });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const cfg = { baseUrl: `http://127.0.0.1:${server.address().port}/v1`, apiKey: KEY, statusPollMs: 20 };
+  try {
+    const infos = [];
+    const result = await hermesProvider().streamChat(cfg, { model: 'hermes-agent', messages: [{ role: 'user', content: 'Build it' }] },
+      () => {}, undefined, (info) => infos.push(info));
+    assert.strictEqual(result.text, 'Built and installed the launcher.');
+    assert.ok(infos.some((i) => i.kind === 'status' && i.text === 'Hermes is still working…'));
+    const asks = infos.filter((i) => i.kind === 'approval');
+    assert.strictEqual(asks.length, 1);
+    assert.deepStrictEqual({ id: asks[0].approvalId, run: asks[0].runId, command: asks[0].command, generation: asks[0].generation },
+      { id: 'req_1', run: 'run_7', command: 'rm -rf build/', generation: 4 });
+    assert.ok(seen.polls >= 5);
+  } finally {
+    server.close();
+  }
+});

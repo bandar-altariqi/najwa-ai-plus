@@ -568,7 +568,7 @@
     'Hermes no longer has this run (was it restarted?). Ask again to get an answer.': 'هذا التنفيذ لم يعد موجودًا في Hermes (هل أُعيد تشغيله؟). اسأل مرة أخرى للحصول على إجابة.',
     'Hermes stopped before it finished. Check the Hermes gateway\'s log for details.': 'توقف Hermes قبل أن ينتهي. راجع سجل Hermes gateway لمعرفة التفاصيل.',
     'Hermes stopped sending the reply before it was finished (the connection closed). It may still be working on your computer: check Hermes, or send "continue".': 'توقف Hermes عن إرسال الرد قبل اكتماله (انقطع الاتصال). قد يكون ما زال يعمل على جهاز الكمبيوتر: تحقق من Hermes، أو أرسل "continue".',
-    'Hermes stopped sending this run\'s progress.': 'توقف Hermes عن إرسال تقدّم هذا التنفيذ.',
+    'Hermes is still working…': 'Hermes ما زال يعمل…',
     'Hermes stopped this run before it finished.': 'أوقف Hermes هذا التنفيذ قبل أن ينتهي.',
     'Hermes stopped before answering ({}). Check the Hermes gateway\'s log for details.': 'توقف Hermes قبل أن يرد ({}). راجع سجل Hermes gateway لمعرفة التفاصيل.',
     'Hermes stopped before it finished: {}': 'توقف Hermes قبل أن ينتهي: {}',
