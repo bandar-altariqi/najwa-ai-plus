@@ -68,8 +68,6 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Najwa AI listens when you tap the microphone, so you can talk to your AI instead of typing.</string>
