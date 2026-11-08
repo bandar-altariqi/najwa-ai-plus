@@ -35,3 +35,16 @@ test('the message box, the chat list and notes stay above it too', () => {
   assert.ok(rule('#toast').includes(`calc(90px + ${BOTTOM})`));
   assert.ok(css.includes(`padding-bottom: ${BOTTOM}`));
 });
+
+test('the chat scrolls up and down only: nothing in it can make it wider than the screen', () => {
+  // On iPhone the chat could be dragged sideways and sprang back (a reply's
+  // long one-line steps were wider than the screen in Safari).
+  assert.match(rule('#messages'), /overflow-x: hidden/);
+  const step = rule('.agent-step');
+  assert.match(step, /min-width: 0/);
+  assert.match(step, /max-width: 100%/);
+  assert.match(step, /overflow: hidden/);
+  // Code blocks and tables keep their own sideways scrolling.
+  assert.match(rule('.msg .content pre'), /overflow-x: auto/);
+  assert.match(rule('.msg .content table'), /overflow-x: auto/);
+});
