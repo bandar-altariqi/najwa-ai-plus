@@ -29,6 +29,7 @@ const { runShell, clip } = require('./shell');
 const { reviewNote } = require('./reviewer');
 const { agentPrompt } = require('./instructions');
 const { createBudget } = require('./budget');
+const { gitTools, GIT_DEFS, GIT_READ_ONLY } = require('./git');
 
 const MAX_READ_LINES = 2000;
 const MAX_READ_CHARS = 100000;
@@ -134,7 +135,9 @@ const DEFS = {
   }
 };
 
-const READ_ONLY = new Set(['list_files', 'read_file', 'find_files', 'search_files', 'command_output', 'todo_write']);
+Object.assign(DEFS, GIT_DEFS);
+
+const READ_ONLY = new Set(['list_files', 'read_file', 'find_files', 'search_files', 'command_output', 'todo_write', ...GIT_READ_ONLY]);
 
 const quote = (s, n = 60) => {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
@@ -154,12 +157,16 @@ function describe(call) {
     case 'command_output': return `Checking ${a.id}`;
     case 'stop_command': return `Stopping ${a.id}`;
     case 'todo_write': return 'Updating the to-do list';
+    case 'git_status': return 'Checking Git status';
+    case 'git_diff': return `Looking at the changes${a.path ? ` in ${quote(a.path, 60)}` : ''}`;
+    case 'git_log': return 'Reading the Git history';
+    case 'git_commit': return `Committing "${quote(String(a.message || '').split('\n')[0], 60)}"`;
     default: return `Using ${call.name}`;
   }
 }
 
 function emoji(call) {
-  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋' }[call.name] || '🛠️';
+  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿' }[call.name] || '🛠️';
 }
 
 const isBinary = (buf) => buf.subarray(0, 8000).includes(0);
@@ -321,7 +328,38 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     };
   }
 
+  // Git (git.js): a commit is asked like a command ("git commit").
+  const git = gitTools({
+    root,
+    inProject,
+    isPrivate: (rel) => !!(firewall.active && firewall.isPrivate && firewall.isPrivate(rel)),
+    see,
+    async askCommit({ message, files, stat }, signal) {
+      const rule = perms.forCommand('git commit');
+      if (rule.decision === 'refuse') return false;
+      const shown = `git commit -m ${JSON.stringify(message.split('\n')[0])}`;
+      const detail = `Message:\n${message}\n\nFiles (${files.length}):\n${files.slice(0, 50).join('\n')}${stat ? `\n\n${stat}` : ''}`;
+      const opinion = await secondOpinion(`commit these changes: ${shown}`, see(detail).text, signal);
+      if (rule.decision === 'allow' && !opinion.force) return true;
+      const choice = await approve({
+        title: 'Commit',
+        command: see(detail).text.slice(0, MAX_CARD),
+        description: [`It commits ${files.length} file${files.length === 1 ? '' : 's'} (it doesn't push).`, opinion.note].filter(Boolean).join('\n'),
+        choices: ['once', 'session', 'deny'],
+        kind: 'command'
+      });
+      if (choice === 'session') perms.remember('command', 'git commit', 'session');
+      return choice !== 'deny';
+    }
+  });
+
   const tools = {
+    ...git,
+    git_commit(args, signal) {
+      const rule = perms.forCommand('git commit');
+      if (rule.decision === 'refuse') return { text: rule.why, error: true, label: 'Git commit (plan mode)' };
+      return git.git_commit(args, signal);
+    },
     list_files(args) {
       const { abs, rel } = inProject(args.path);
       if (!fs.statSync(abs).isDirectory()) return { text: `${rel} is a file, not a folder.`, error: true };

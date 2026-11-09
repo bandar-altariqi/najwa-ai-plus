@@ -64,6 +64,7 @@ function agentPrompt({ root, mode, firewall, dryRun, reviewer }) {
     '- For a task with several steps, keep a to-do list with todo_write and update it as you go.',
     '- After changing code, run the project\'s own checks (tests, build, linter) with run_command when there are any, and fix what they find.',
     '- Command output is already shortened for you when it\'s long, so don\'t pipe commands through head or tail: that hides whether they failed.',
+    '- For Git, look with git_status, git_diff and git_log. Commit with git_commit only when the user asks for a commit (or the project\'s instructions say to); never push unless asked.',
     '- Long-running commands (a dev server, a watcher) go in the background (background: true); read their output with command_output and stop them with stop_command.',
     '- Don\'t make things up about the project: if you haven\'t read it, read it. If something is unclear and it matters, ask the user instead of guessing.',
     '- Paths are relative to the project folder. You can\'t use anything outside it.',

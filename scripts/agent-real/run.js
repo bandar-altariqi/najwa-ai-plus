@@ -223,6 +223,32 @@ const TASKS = {
       'VAT on the discounted amount': /vat\(after\)/.test(read(root, 'lib/total.js') || '')
     })
   },
+  // Git: fix, then commit when asked.
+  'git-commit': {
+    files: {
+      'package.json': '{ "name": "pct", "scripts": { "test": "node test.js" } }\n',
+      'pct.js': "exports.pct = (part, whole) => Math.round(part / whole * 10) + '%';\n",
+      'test.js': "const assert = require('assert');\nassert.strictEqual(require('./pct').pct(1, 4), '25%');\nconsole.log('ok');\n"
+    },
+    git: true,
+    ask: 'Fix the failing test, then commit the fix with a good message.',
+    mode: 'edits',
+    check: (root, log) => {
+      let msg = '';
+      let count = 0;
+      try {
+        msg = execFileSync('git', ['log', '-1', '--pretty=%B'], { cwd: root, encoding: 'utf8' });
+        count = Number(execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: root, encoding: 'utf8' }));
+      } catch {}
+      return {
+        'tests pass': passes(root, 'node', ['test.js']),
+        'committed once more': count === 2,
+        'used git_commit': log.calls.some((c) => c.name === 'git_commit'),
+        'clean after': !execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim(),
+        'message says what': msg.trim().length > 8
+      };
+    }
+  },
   // The budget guard: a tiny token budget, and "Stop" at its question.
   'budget-stop': {
     files: {
@@ -258,6 +284,14 @@ async function runTask(name, task) {
   fs.rmSync(root, { recursive: true, force: true });
   fs.mkdirSync(root, { recursive: true });
   write(root, task.files);
+  if (task.git) {
+    const g = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 'agent-real@example.com');
+    g('config', 'user.name', 'agent-real');
+    g('add', '-A');
+    g('commit', '-q', '-m', 'Start');
+  }
   const log = { task: name, model: MODEL, ask: task.ask, mode: task.mode, steps: [], cards: [], reviews: [], calls: [], sent: [], text: '', error: null };
   const firewall = createFirewall({ enabled: true, cloud: true });
   const reviewer = process.env.REVIEWER
