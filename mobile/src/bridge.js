@@ -302,6 +302,12 @@ const menuListeners = new Set();
 const withStorage = (fn) => async (...args) => fn(await ready, ...args);
 
 window.balimda = {
+  // Allow or Deny tapped on the agent's notification (see app.agentAsks).
+  onAgentAnswer(cb) {
+    if (!NetPlugin) return () => {};
+    const sub = NetPlugin.addListener('agentAnswer', (e) => cb(e || {}));
+    return () => Promise.resolve(sub).then((s) => s.remove()).catch(() => {});
+  },
   // A tapped notification: open its chat (see app.agentAsks).
   onOpenChat(cb) {
     if (!NetPlugin) return () => {};
@@ -383,9 +389,9 @@ window.balimda = {
     // Najwa AI Plus: a notification when the agent on a computer asks while
     // this chat isn't on screen; tapping it opens the chat (onOpenChat).
     // Android and iPhone (an older app has no such method).
-    async agentAsks({ title, text, chatId }) {
+    async agentAsks({ title, text, chatId, runId, canAllow }) {
       try {
-        if (NetPlugin) await NetPlugin.agentAsks({ title: String(title || ''), text: String(text || ''), chatId: String(chatId || '') });
+        if (NetPlugin) await NetPlugin.agentAsks({ title: String(title || ''), text: String(text || ''), chatId: String(chatId || ''), runId: runId ? String(runId) : null, canAllow: !!canAllow });
       } catch {
         // the card is still in the chat
       }

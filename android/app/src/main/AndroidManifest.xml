@@ -32,6 +32,11 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Najwa AI Plus: Allow / Deny on the agent's notification. -->
+        <receiver
+            android:name=".AgentAnswerReceiver"
+            android:exported="false" />
+
         <!-- Qualcomm's OpenCL driver, used for Adreno GPU inference (optional). -->
         <uses-native-library
             android:name="libOpenCL.so"

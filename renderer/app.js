@@ -1308,10 +1308,15 @@ function agentEvent(chat, msg, evt) {
       // Najwa AI Plus on the phone: a notification too, so the question is
       // seen with the app in the background. Tapping it opens this chat.
       if (askKind && S.info.mobile && api.app.agentAsks) {
+        const choices = Array.isArray(evt.choices) ? evt.choices : [];
         api.app.agentAsks({
           title: origin && origin.computer ? `The agent on ${origin.name} is asking` : 'The agent is asking',
           text: `${evt.title ? String(evt.title).slice(0, 120) : 'It needs your permission'}${chat.title ? ` · ${String(chat.title).slice(0, 60)}` : ''}`,
-          chatId: chat.id
+          chatId: chat.id,
+          // Allow and Deny on the notification; a risky question (no "for this
+          // chat" choice) or the budget gets only Deny there.
+          runId: evt.runId,
+          canAllow: askKind !== 'budget' && choices.includes('session')
         });
       }
     }
@@ -1381,6 +1386,22 @@ async function answerApproval(chat, msg, approval, choice) {
   }
   scheduleMessageRender(chat, msg);
   saveChatSoon(chat, 500);
+}
+
+// Najwa AI Plus: an answer tapped on the agent's notification goes to its
+// card, as a tap there would. Only "once" or "deny".
+async function answerFromNotification({ chatId, runId, choice } = {}) {
+  if (typeof chatId !== 'string' || typeof runId !== 'string') return;
+  const chat = S.cache.get(chatId) || await loadChat(chatId);
+  if (!chat) return;
+  for (const msg of chat.messages) {
+    const a = (msg.approvals || []).find((x) => x.runId === runId && x.state === 'pending');
+    if (!a) continue;
+    // Allow only where the card offers it for this chat too (never a risky one).
+    const ok = choice === 'once' && a.askKind !== 'budget' && (a.choices || []).includes('session') ? 'once' : 'deny';
+    await answerApproval(chat, msg, a, ok);
+    return;
+  }
 }
 
 // What the agent did (tools) and what it asked (approvals), above its answer.
@@ -4511,6 +4532,8 @@ function bindEvents() {
   });
 
   if (api.onOpenChat) api.onOpenChat((id) => { if (typeof id === 'string') openChat(id); });
+  // Najwa AI Plus: Allow or Deny tapped on the agent's notification.
+  if (api.onAgentAnswer) api.onAgentAnswer((e) => answerFromNotification(e).catch(() => {}));
   api.onMenu((action) => {
     if (action === 'new-chat') newChat();
     if (action === 'search') { if (el.app.classList.contains('sidebar-collapsed')) toggleSidebar(); el.search.focus(); el.search.select(); }

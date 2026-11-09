@@ -116,8 +116,24 @@ public class NetPlugin extends Plugin {
     @PluginMethod
     public void agentAsks(PluginCall call) {
         String chatId = call.getString("chatId", "");
-        AgentAlerts.show(getContext().getApplicationContext(), call.getString("title", "Najwa AI Plus"), call.getString("text", ""), chatId);
+        AgentAlerts.show(getContext().getApplicationContext(), call.getString("title", "Najwa AI Plus"), call.getString("text", ""), chatId,
+            call.getString("runId", null), Boolean.TRUE.equals(call.getBoolean("canAllow", false)));
         call.resolve();
+    }
+
+    // The running app, for answers from the notification (AgentAnswerReceiver).
+    private static volatile NetPlugin current;
+
+    /** An answer tapped on a notification: false when the app isn't there to take it. */
+    static boolean answer(String chatId, String runId, String choice) {
+        NetPlugin p = current;
+        if (p == null || p.getBridge() == null) return false;
+        JSObject evt = new JSObject();
+        evt.put("chatId", chatId);
+        evt.put("runId", runId);
+        evt.put("choice", choice);
+        p.notifyListeners("agentAnswer", evt, true);
+        return true;
     }
 
     /** { chatId } The chat is open (or answered): its notification goes. */
@@ -148,6 +164,7 @@ public class NetPlugin extends Plugin {
     // app listens.
     @Override
     public void load() {
+        current = this;
         if (getActivity() != null) openFrom(getActivity().getIntent());
     }
 

@@ -37,7 +37,15 @@ public class NetPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
 
     // Najwa AI Plus: tapping the agent's notification opens its chat.
     override public func load() {
-        UNUserNotificationCenter.current().delegate = self
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        // Allow needs the phone unlocked; a risky question gets only Deny.
+        let allow = UNNotificationAction(identifier: "allow", title: "Allow", options: [.authenticationRequired])
+        let deny = UNNotificationAction(identifier: "deny", title: "Deny", options: [.destructive])
+        center.setNotificationCategories([
+            UNNotificationCategory(identifier: "agent-ask", actions: [allow, deny], intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: "agent-ask-risky", actions: [deny], intentIdentifiers: [], options: [])
+        ])
     }
 
     /// agentAsks({title, text, chatId}): the agent on a computer asks while this
@@ -49,7 +57,11 @@ public class NetPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         content.body = call.getString("text") ?? ""
         content.sound = .default
         content.threadIdentifier = "agent-\(chatId)"
-        content.userInfo = ["chatId": chatId]
+        let runId = call.getString("runId") ?? ""
+        content.userInfo = ["chatId": chatId, "runId": runId]
+        if !runId.isEmpty {
+            content.categoryIdentifier = (call.getBool("canAllow") ?? false) ? "agent-ask" : "agent-ask-risky"
+        }
         let request = UNNotificationRequest(identifier: "agent-\(chatId)", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { _ in }
         call.resolve()
@@ -226,8 +238,14 @@ extension NetPlugin: UNUserNotificationCenterDelegate {
     }
 
     public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        if let chatId = response.notification.request.content.userInfo["chatId"] as? String, !chatId.isEmpty {
-            notifyListeners("openChat", data: ["chatId": chatId], retainUntilConsumed: true)
+        let info = response.notification.request.content.userInfo
+        if let chatId = info["chatId"] as? String, !chatId.isEmpty {
+            let runId = info["runId"] as? String ?? ""
+            if !runId.isEmpty && (response.actionIdentifier == "allow" || response.actionIdentifier == "deny") {
+                notifyListeners("agentAnswer", data: ["chatId": chatId, "runId": runId, "choice": response.actionIdentifier == "allow" ? "once" : "deny"], retainUntilConsumed: true)
+            } else {
+                notifyListeners("openChat", data: ["chatId": chatId], retainUntilConsumed: true)
+            }
         }
         completionHandler()
     }
