@@ -5,6 +5,7 @@
 import Capacitor
 import Foundation
 import UIKit
+import UserNotifications
 
 /**
  * Requests made with the iPhone's own network code instead of the web view,
@@ -28,8 +29,45 @@ public class NetPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "request", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "replying", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "replying", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "agentAsks", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "agentSeen", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "askNotifications", returnType: CAPPluginReturnPromise)
     ]
+
+    // Najwa AI Plus: tapping the agent's notification opens its chat.
+    override public func load() {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    /// agentAsks({title, text, chatId}): the agent on a computer asks while this
+    /// chat isn't on screen. One notification per chat; a newer one replaces it.
+    @objc func agentAsks(_ call: CAPPluginCall) {
+        let chatId = call.getString("chatId") ?? ""
+        let content = UNMutableNotificationContent()
+        content.title = call.getString("title") ?? "Najwa AI Plus"
+        content.body = call.getString("text") ?? ""
+        content.sound = .default
+        content.threadIdentifier = "agent-\(chatId)"
+        content.userInfo = ["chatId": chatId]
+        let request = UNNotificationRequest(identifier: "agent-\(chatId)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { _ in }
+        call.resolve()
+    }
+
+    /// agentSeen({chatId}): the chat is open; its notification goes.
+    @objc func agentSeen(_ call: CAPPluginCall) {
+        let id = "agent-\(call.getString("chatId") ?? "")"
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [id])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+        call.resolve()
+    }
+
+    /// askNotifications(): iOS asks once whether the app may notify.
+    @objc func askNotifications(_ call: CAPPluginCall) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        call.resolve()
+    }
 
     private struct Running {
         let id: String
@@ -177,5 +215,20 @@ public class NetPlugin: CAPPlugin, CAPBridgedPlugin, URLSessionDataDelegate {
         default:
             return "\(error.localizedDescription) (server\(at))"
         }
+    }
+}
+
+// Najwa AI Plus: the agent's notifications show while the app is open too (on
+// another chat), and a tap opens the chat ("openChat", kept until the app listens).
+extension NetPlugin: UNUserNotificationCenterDelegate {
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .list, .sound])
+    }
+
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        if let chatId = response.notification.request.content.userInfo["chatId"] as? String, !chatId.isEmpty {
+            notifyListeners("openChat", data: ["chatId": chatId], retainUntilConsumed: true)
+        }
+        completionHandler()
     }
 }

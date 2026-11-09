@@ -382,7 +382,7 @@ window.balimda = {
     },
     // Najwa AI Plus: a notification when the agent on a computer asks while
     // this chat isn't on screen; tapping it opens the chat (onOpenChat).
-    // Android only for now (older app: no such method).
+    // Android and iPhone (an older app has no such method).
     async agentAsks({ title, text, chatId }) {
       try {
         if (NetPlugin) await NetPlugin.agentAsks({ title: String(title || ''), text: String(text || ''), chatId: String(chatId || '') });

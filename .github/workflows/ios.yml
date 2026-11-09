@@ -1,0 +1,58 @@
+name: iPhone app (Plus)
+
+# Builds the Najwa AI Plus iPhone app (com.bandaraltariqi.najwa.plus),
+# unsigned, and attaches it to the run. Nothing is published: no release, no
+# TestFlight (Plus must never reach Najwa AI's store listings).
+#
+# Run it by hand (Actions → iPhone app (Plus) → Run workflow): macOS minutes
+# count ten times against a private repository's Actions allowance.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:web
+      - run: npx cap sync ios
+      # Built for iPhones (arm64), without signing (signing needs an Apple
+      # Developer account). The version is 1.0.<run number>.
+      - name: Build the app (unsigned)
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build-ios \
+            MARKETING_VERSION=1.0.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -quiet build
+      - name: Check the app ID and the native engine
+        run: |
+          APP=build-ios/Build/Products/Release-iphoneos/App.app
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = "com.bandaraltariqi.najwa.plus" || { echo "::error::The app doesn't have Plus's bundle ID"; exit 1; }
+          test -d "$APP/Frameworks/llama.framework" || { echo "::error::llama.framework is missing from the app"; exit 1; }
+      # An unsigned .ipa, to install with a signing tool (Sideloadly or AltStore
+      # with your Apple ID).
+      - name: Package
+        run: |
+          mkdir -p Payload
+          cp -R build-ios/Build/Products/Release-iphoneos/App.app Payload/NajwaAIPlus.app
+          zip -qry Najwa-AI-Plus-iOS-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Najwa-AI-Plus-iOS-unsigned
+          path: Najwa-AI-Plus-iOS-unsigned.ipa
+          if-no-files-found: error
