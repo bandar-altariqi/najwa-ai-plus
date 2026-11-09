@@ -1,6 +1,6 @@
 {
-  "appId": "com.bandaraltariqi.najwa",
-  "appName": "Najwa AI",
+  "appId": "com.bandaraltariqi.najwa.plus",
+  "appName": "Najwa AI Plus",
   "webDir": "www",
   "server": {
     "androidScheme": "https"

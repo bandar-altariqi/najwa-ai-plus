@@ -573,7 +573,7 @@ final class Download: NSObject, URLSessionDownloadDelegate {
         // A background session: iOS carries on with the download when the app
         // is in the background or the phone is locked, and picks it up again
         // after the connection drops.
-        let config = URLSessionConfiguration.background(withIdentifier: "com.bandaraltariqi.najwa.download.\(UUID().uuidString)")
+        let config = URLSessionConfiguration.background(withIdentifier: "com.bandaraltariqi.najwa.plus.download.\(UUID().uuidString)")
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = false
         config.timeoutIntervalForRequest = 60

@@ -20,13 +20,15 @@ def najwaStore = (System.getenv("NAJWA_STORE") ?: project.findProperty("najwaSto
         .toString().trim().toLowerCase().replaceAll("[^a-z0-9_-]", "")
 
 android {
+    // The Java package (and the native engine's JNI names) stay Najwa AI's;
+    // the app's own ID below is Plus's, so it installs beside Najwa AI.
     namespace = "com.bandaraltariqi.najwa"
     compileSdk = rootProject.ext.compileSdkVersion
     buildFeatures {
         buildConfig true
     }
     defaultConfig {
-        applicationId "com.bandaraltariqi.najwa"
+        applicationId "com.bandaraltariqi.najwa.plus"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI sets the build number so each new APK installs as an update.

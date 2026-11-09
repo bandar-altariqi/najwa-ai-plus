@@ -40,7 +40,7 @@ public class GoogleAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationP
     ]
 
     private static let scope = "https://www.googleapis.com/auth/drive.appdata"
-    private static let keychainService = "com.bandaraltariqi.najwa.google-sign-in"
+    private static let keychainService = "com.bandaraltariqi.najwa.plus.google-sign-in"
     private static let keychainAccount = "refresh-token"
 
     private var session: ASWebAuthenticationSession?
