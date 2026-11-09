@@ -423,6 +423,9 @@ window.balimda = {
           // the computer's own.
           browse: !!req.browse,
           connectors: !!req.connectors,
+          // Najwa AI Plus: a chat with a project folder on the computer runs
+          // the agent there (the phone only shows its steps and answers).
+          ...(req.provider === 'computer' && req.agent && req.agent.root ? { agent: { root: String(req.agent.root), mode: String(req.agent.mode || 'ask') } } : {}),
           chatId: req.chatId,
           steering: steer,
           // Hermes: follow a run that is already going (a reply cut off when
@@ -512,6 +515,8 @@ window.balimda = {
     // Answer a question a computer asked (its connectors), over the private
     // link the phone uses for the computer's models.
     answerOn: (computerId, payload) => computers.answerOn(computerId, payload),
+    // Najwa AI Plus: a computer's project folders, and undoing its agent's changes.
+    agentOn: (computerId, op, payload) => computers.agentOn(computerId, op, payload),
     // Answer an agent's request for permission (Hermes Agent), directly or
     // through the computer the phone is using.
     async approve(providerId, model, payload) {

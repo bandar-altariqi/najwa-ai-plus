@@ -35,6 +35,7 @@ const el = {
   title: $('#chatTitle'),
   assistantSelect: $('#assistantSelect'),
   modelSelect: $('#modelSelect'),
+  projectBtn: $('#projectBtn'),
   messages: $('#messages'),
   input: $('#input'),
   sendBtn: $('#sendBtn'),
@@ -710,6 +711,7 @@ function renderChat() {
   el.title.textContent = chat ? chat.title : 'New chat';
   document.title = chat ? `${chat.title} — ${appName()}` : appName();
   renderSelectors();
+  updateProjectBtn();
   updateComposer();
   el.messages.replaceChildren();
 
@@ -983,6 +985,164 @@ function fillContent(container, msg) {
   }
 }
 
+// ---- Najwa AI Plus: the agent's project folder ---------------------------------
+// A chat can have a project folder (on this computer, or on a computer the
+// phone uses): its replies then run as an agent there, with the mode chosen
+// here. The folder and mode are kept with the chat.
+
+const AGENT_MODES = [
+  ['ask', 'Ask first', 'Asks before every change to a file and every command.'],
+  ['edits', 'Auto-edit', 'Changes files on its own, asks before commands.'],
+  ['plan', 'Plan only', 'Reads and writes a plan. Changes nothing.'],
+  ['auto', 'Auto', 'Does it all on its own, except commands that could do harm.']
+];
+const modeLabel = (m) => (AGENT_MODES.find((x) => x[0] === m) || AGENT_MODES[0])[1];
+const projectOf = (chat) => (chat ? chat.project : S.draftProject) || null;
+
+function updateProjectBtn() {
+  if (!el.projectBtn) return;
+  const p = projectOf(S.current);
+  el.projectBtn.textContent = p ? `📁 ${p.name} · ${modeLabel(p.mode)}` : '📁 Project';
+  el.projectBtn.classList.toggle('on', !!p);
+  el.projectBtn.title = p
+    ? `${p.root}${p.computerName ? ` (on ${p.computerName})` : ''}. Click to change the folder or mode.`
+    : 'Work in a project folder: the agent can read, change and run things there.';
+}
+
+function setProject(chat, project) {
+  if (chat) {
+    if (project) chat.project = project;
+    else delete chat.project;
+    saveChatSoon(chat, 300);
+  } else {
+    S.draftProject = project;
+  }
+  updateProjectBtn();
+}
+
+// The agent for a reply: { root, mode }, when the chat has a folder and the
+// model can work there (on the phone: a model of the computer with the folder).
+function agentFor(chat, model) {
+  const p = projectOf(chat);
+  if (!p || !model || !usesTools(model)) return null;
+  if (S.info.mobile) {
+    if (model.provider !== 'computer' || !p.computerName || !String(model.model).includes(`(${p.computerName}`)) return null;
+  } else if (p.computerId || model.provider === 'computer') {
+    return null;
+  }
+  return { root: p.root, mode: p.mode || 'ask' };
+}
+
+// Folders to choose from: this computer's recent ones, or on the phone each
+// computer's that shares with it.
+async function projectChoices() {
+  if (!S.info.mobile) return api.agent ? (await api.agent.recent()).map((p) => ({ ...p })) : [];
+  const out = [];
+  for (const [id, c] of Object.entries(S.settings.computers || {})) {
+    if (!c || !c.enabled || !api.ai.agentOn) continue;
+    try {
+      for (const p of await api.ai.agentOn(id, 'agentProjects')) out.push({ ...p, computerId: id, computerName: c.name });
+    } catch {
+      // not reachable now
+    }
+  }
+  return out;
+}
+
+function openProjectDialog() {
+  const chat = S.current;
+  const now = projectOf(chat);
+  let picked = now ? { ...now } : null;
+  let mode = (now && now.mode) || (S.settings.agent && S.settings.agent.defaultMode) || 'ask';
+  const folderLine = h('p', { class: 'help' });
+  const showFolder = () => {
+    folderLine.textContent = picked
+      ? `Folder: ${picked.root}${picked.computerName ? ` (on ${picked.computerName})` : ''}`
+      : 'No folder yet. Choose one, and replies in this chat can read, change and run things in it, as you allow.';
+  };
+  showFolder();
+  const recent = h('div', { class: 'project-list' }, h('p', { class: 'help', text: 'Loading recent folders…' }));
+  projectChoices().then((list) => {
+    recent.replaceChildren(...(list.length ? list.map((p) => h('button', {
+      class: `btn project-choice ${picked && picked.root === p.root ? 'primary' : ''}`,
+      title: p.root,
+      text: `📁 ${p.name}${p.computerName ? ` · ${p.computerName}` : ''}`,
+      onclick: (e) => {
+        picked = { root: p.root, name: p.name, ...(p.computerId ? { computerId: p.computerId, computerName: p.computerName } : {}) };
+        for (const b of recent.children) b.classList.toggle('primary', b === e.currentTarget);
+        showFolder();
+      }
+    })) : [h('p', { class: 'help', text: S.info.mobile ? 'No folders yet. Choose one on your computer first (Najwa AI Plus, 📁 Project), or turn on sharing with this phone there.' : 'No recent folders.' })]));
+  }).catch(() => recent.replaceChildren(h('p', { class: 'help', text: 'Couldn\'t load the recent folders.' })));
+  const modes = h('div', { class: 'project-modes' }, ...AGENT_MODES.map(([id, label, help]) => h('label', { class: 'check' },
+    h('input', { type: 'radio', name: 'agentMode', value: id, checked: id === mode, onchange: () => { mode = id; } }),
+    h('span', {}, h('strong', { text: label }), ` · ${help}`))));
+  const body = h('div', {},
+    folderLine,
+    !S.info.mobile && api.agent ? h('div', { class: 'field-row' }, h('button', {
+      class: 'btn',
+      text: 'Choose a folder…',
+      onclick: async () => {
+        const root = await api.agent.pickFolder();
+        if (!root) return;
+        picked = { root, name: root.split(/[\\/]/).filter(Boolean).pop() || root };
+        showFolder();
+      }
+    })) : null,
+    h('h4', { text: 'Recent folders' }),
+    recent,
+    h('h4', { text: 'What the agent may do' }),
+    modes,
+    h('p', { class: 'help', text: 'Every change can be undone (⋯ → Undo the agent\'s last change). Secrets in files are hidden from cloud models, and private files stay on your computer (Settings → Agent).' }));
+  openModal({
+    title: 'Project folder',
+    body,
+    buttons: [
+      ...(now ? [{ label: 'Stop using a folder', danger: true, onClick: () => setProject(chat, null) }] : []),
+      { label: 'Cancel' },
+      {
+        label: 'Use this folder',
+        primary: true,
+        onClick: () => {
+          if (!picked) {
+            toast('Choose a folder first.');
+            return false;
+          }
+          setProject(chat, { ...picked, mode });
+          const model = currentModel();
+          if (model && !agentFor(chat || null, model)) {
+            toast(S.info.mobile ? `Choose one of ${picked.computerName}'s models to work in this folder.` : 'Choose a model from Ollama, LM Studio, Claude or OpenAI to work in this folder.', 6000);
+          }
+          return undefined;
+        }
+      }
+    ]
+  });
+}
+
+// Undo the agent's newest change in a chat (on the computer with the folder).
+async function undoAgentChange(chat) {
+  const p = projectOf(chat);
+  const via = p && p.computerId ? { list: () => api.ai.agentOn(p.computerId, 'agentCheckpoints', { chatId: chat.id }), undo: () => api.ai.agentOn(p.computerId, 'agentUndo', { chatId: chat.id }) }
+    : api.agent ? { list: () => api.agent.checkpoints(chat.id), undo: () => api.agent.undo(chat.id) } : null;
+  if (!via) {
+    toast('This chat has no project folder.');
+    return;
+  }
+  try {
+    const list = await via.list();
+    if (!list.length) {
+      toast('The agent hasn\'t changed anything in this chat that can be undone.');
+      return;
+    }
+    if (!(await confirmBox(`Undo "${list[0].label}"? ${list[0].files.length} file${list[0].files.length === 1 ? '' : 's'} go back to how they were.`, 'Undo'))) return;
+    const res = await via.undo();
+    toast(`Undone: ${res.undone.join(', ')}${res.skipped.length ? ` (${res.skipped.length} file${res.skipped.length === 1 ? ' was' : 's were'} too big to keep)` : ''}`, 5000);
+  } catch (err) {
+    toast(`Couldn't undo: ${errorText(err)}`, 5000);
+  }
+}
+
 // ---- Hermes Agent: live tool steps and approvals ------------------------------
 
 const APPROVAL_LABELS = { once: 'Allow once', session: 'Allow for this chat', always: 'Always allow', deny: 'Deny' };
@@ -1003,8 +1163,12 @@ function agentEvent(chat, msg, evt) {
   } else if (evt.kind === 'approval') {
     msg.approvals = msg.approvals || [];
     const origin = evt.origin && evt.origin.id ? { id: String(evt.origin.id), name: String(evt.origin.name || 'another device').slice(0, 60), computer: !!evt.origin.computer } : null;
-    msg.approvals.push({ runId: evt.runId, approvalId: evt.approvalId || null, generation: Number.isInteger(evt.generation) ? evt.generation : null, connectorId: evt.connectorId ? String(evt.connectorId) : null, origin, title: evt.title ? String(evt.title).slice(0, 200) : null, command: String(evt.command || '').slice(0, 2000), description: String(evt.description || '').slice(0, 500), choices: Array.isArray(evt.choices) && evt.choices.length ? evt.choices : ['once', 'deny'], state: 'pending' });
-    if (S.current !== chat || document.hidden) toast(`${evt.title ? 'A connector' : 'Hermes'} is asking for permission. Open the chat to answer.`, 5000);
+    const askKind = evt.askKind === 'edit' || evt.askKind === 'command' ? evt.askKind : null;
+    msg.approvals.push({ runId: evt.runId, approvalId: evt.approvalId || null, generation: Number.isInteger(evt.generation) ? evt.generation : null, connectorId: evt.connectorId ? String(evt.connectorId) : null, origin, title: evt.title ? String(evt.title).slice(0, 200) : null, command: String(evt.command || '').slice(0, askKind ? 12000 : 2000), description: String(evt.description || '').slice(0, askKind ? 1500 : 500), choices: Array.isArray(evt.choices) && evt.choices.length ? evt.choices : ['once', 'deny'], askKind, state: 'pending' });
+    if (S.current !== chat || document.hidden) toast(`${askKind ? 'The agent' : evt.title ? 'A connector' : 'Hermes'} is asking for permission. Open the chat to answer.`, 5000);
+  } else if (evt.kind === 'todo' && Array.isArray(evt.items)) {
+    // The agent's to-do list (Najwa AI Plus).
+    msg.todo = evt.items.slice(0, 30).map((i) => ({ text: String(i.text || '').slice(0, 200), status: ['pending', 'in_progress', 'done'].includes(i.status) ? i.status : 'pending' }));
   } else if (evt.kind === 'status') {
     msg.agentStatus = String(evt.text).slice(0, 200);
   } else if (evt.kind === 'shot' && /^data:image\//.test(evt.src || '')) {
@@ -1065,12 +1229,42 @@ async function answerApproval(chat, msg, approval, choice) {
 }
 
 // What the agent did (tools) and what it asked (approvals), above its answer.
+// A command or diff on an approval card: changed lines coloured.
+function approvalText(a) {
+  if (!a.askKind) return h('pre', { class: 'approval-command', dir: 'ltr', text: a.command });
+  const pre = h('pre', { class: 'approval-command diff', dir: 'ltr', translate: 'no' });
+  for (const line of a.command.split('\n')) {
+    const cls = /^\+(?!\+\+ )/.test(line) ? 'add' : /^-(?!-- )/.test(line) ? 'del' : /^@@/.test(line) ? 'hunk' : /^(\+\+\+|---) /.test(line) ? 'file' : '';
+    pre.append(h('span', { class: cls ? `diff-${cls}` : null, text: line || ' ' }));
+  }
+  return pre;
+}
+
+// The agent's labels for its questions: "for this chat" means edits, or this command.
+function approvalLabel(a, c) {
+  if (a.askKind === 'edit' && c === 'session') return 'Allow edits for this chat';
+  if (a.askKind === 'command' && c === 'always') return 'Always allow this command';
+  return APPROVAL_LABELS[c];
+}
+
+function todoList(msg) {
+  if (!msg.todo || !msg.todo.length) return null;
+  const done = msg.todo.filter((i) => i.status === 'done').length;
+  return h('div', { class: 'agent-todo' },
+    h('div', { class: 'agent-todo-head', text: `To-do · ${done} of ${msg.todo.length} done` }),
+    ...msg.todo.map((i) => h('div', { class: `agent-todo-item ${i.status}` },
+      h('span', { class: 'agent-todo-mark', text: i.status === 'done' ? '✓' : i.status === 'in_progress' ? '▸' : '○' }),
+      h('span', { dir: 'auto', translate: 'no', text: i.text }))));
+}
+
 function agentSteps(msg) {
   const tools = msg.tools || [];
   const approvals = msg.approvals || [];
-  if (!tools.length && !approvals.length && !msg.agentStatus) return null;
+  if (!tools.length && !approvals.length && !msg.agentStatus && !(msg.todo && msg.todo.length)) return null;
   const chat = [...S.cache.values()].find((c) => c.messages.includes(msg)) || S.current;
   const wrap = h('div', { class: 'agent' });
+  const todo = todoList(msg);
+  if (todo) wrap.append(todo);
   const stateOf = (t) => {
     if (t.steer) return t.status === 'read' ? 'read ✓' : 'reads it after this step';
     return t.status === 'running' ? 'working…' : t.status === 'stopped' ? 'stopped' : '✓';
@@ -1098,20 +1292,20 @@ function agentSteps(msg) {
       wrap.append(h('div', { class: 'approval' },
         h('div', { class: 'approval-title', text: a.title ? `${a.title}?` : 'Hermes is asking for permission' }),
         a.description ? h('div', { class: 'approval-why', text: a.description }) : null,
-        a.command ? h('pre', { class: 'approval-command', dir: 'ltr', text: a.command }) : null,
+        a.command ? approvalText(a) : null,
         approvalPlace(a) === 'elsewhere' ? h('div', { class: 'approval-elsewhere', text: `Waiting for your answer on ${a.origin.name}.` }) : h('div', { class: 'approval-buttons' },
           // A connector's "Always allow" is saved in this device's settings, so
           // only offered on the device that asked.
           ...(a.choices || ['once', 'deny']).filter((c) => APPROVAL_LABELS[c] && !(c === 'always' && a.connectorId && approvalPlace(a) !== 'here')).map((c) => h('button', {
             class: `btn ${c === 'deny' ? 'danger' : c === 'once' ? 'primary' : ''}`,
-            text: APPROVAL_LABELS[c],
+            text: approvalLabel(a, c),
             disabled: a.state === 'sending',
             onclick: () => answerApproval(chat, msg, a, c)
           })))));
     } else {
       wrap.append(h('div', { class: `approval-done ${a.state === 'deny' ? 'denied' : ''}` },
         h('span', { class: 'approval-label', text: `${a.state === 'deny' ? '✗' : a.state === 'expired' ? '·' : '✓'} ${APPROVAL_DONE[a.state] || a.state}` }),
-        a.command ? h('code', { text: a.command.length > 80 ? `${a.command.slice(0, 80)}…` : a.command }) : null));
+        a.askKind === 'edit' && a.title ? h('code', { text: a.title }) : a.command ? h('code', { text: a.command.split('\n')[0].slice(0, 80) }) : null));
     }
   }
   if (msg.pending && msg.agentStatus) wrap.append(h('div', { class: 'agent-status', text: msg.agentStatus }));
@@ -1944,6 +2138,7 @@ function newChat() {
   replySpace = null;
   S.newChatModel = null;
   S.newChatAssistantId = null;
+  S.draftProject = null;
   S.state.lastChatId = null;
   api.state.save({ lastChatId: null });
   renderChat();
@@ -2367,6 +2562,10 @@ async function send() {
   if (!chat) {
     chat = await api.chats.create({ assistantId: currentAssistantId(), model });
     chat.titleAuto = true;
+    if (S.draftProject) {
+      chat.project = S.draftProject;
+      S.draftProject = null;
+    }
     S.cache.set(chat.id, chat);
     S.current = chat;
     S.state.lastChatId = chat.id;
@@ -2501,6 +2700,8 @@ async function runCompletion(chat, entry, resume = null) {
     // Connectors (Settings → Connectors) where the reply is written: this
     // device's, or a computer's when its models are used.
     connectors: usesTools(model),
+    // Najwa AI Plus: a chat with a project folder runs the agent there.
+    ...(agentFor(chat, model) ? { agent: agentFor(chat, model) } : {}),
     chatId: chat.id,
     // For a computer's models: this reply's message, so the computer keeps its own copy.
     replyId: msg.id,
@@ -3184,6 +3385,7 @@ function openSettings(tab = 'general') {
     ['assistants', 'Assistants'],
     ['memory', 'Memory'],
     ...(api.connectors ? [['connectors', 'Connectors']] : []),
+    ...(api.agent ? [['agent', 'Agent']] : []),
     ...(api.voice ? [['voice', 'Voice']] : []),
     ...(api.sync ? [['sync', 'Sync']] : []),
     ['data', 'Data & backup'],
@@ -3215,6 +3417,42 @@ function openSettings(tab = 'general') {
     h('label', { class: 'check' }, bind(h('input', { type: 'checkbox', checked: obj[key] }), obj, key), label);
 
   const views = {
+    // Najwa AI Plus: how the agent works in project folders (this computer only).
+    agent() {
+      s.agent = { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], ...(s.agent || {}) };
+      const a = s.agent;
+      const mode = bind(h('select', { class: 'select' }, AGENT_MODES.map(([id, label, help]) => h('option', { value: id, text: `${label}: ${help}` }))), a, 'defaultMode');
+      mode.value = a.defaultMode || 'ask';
+      const dry = bind(h('select', { class: 'select' },
+        h('option', { value: 'risky', text: 'When it would ask: try commands that change files in a copy first' }),
+        h('option', { value: 'always', text: 'Every command that changes files (so all of them can be undone)' }),
+        h('option', { value: 'off', text: 'Off: run commands directly' })), a, 'dryRun');
+      dry.value = a.dryRun || 'risky';
+      const privateFiles = bind(h('textarea', { class: 'input', rows: 4, dir: 'ltr', placeholder: 'config/production.json\nbackups/**', value: a.privateFiles || '' }), a, 'privateFiles');
+      const rules = h('textarea', { class: 'input', rows: 4, dir: 'ltr', placeholder: 'npm test\nnpm run build', value: (a.rules || []).join('\n') });
+      rules.addEventListener('input', () => {
+        a.rules = rules.value.split('\n').map((l) => l.trim()).filter(Boolean);
+        changed();
+      });
+      const reviewer = h('select', { class: 'select' },
+        h('option', { value: '', text: 'Off' }),
+        ...allModels().filter((m) => m.provider !== 'hermes' && m.provider !== 'onDevice').map((m) => h('option', { value: modelKey(m), text: `${displayModel(m.model)} (${providerLabel(m.provider)})` })));
+      reviewer.value = a.reviewer ? modelKey(a.reviewer) : '';
+      reviewer.addEventListener('change', () => {
+        a.reviewer = reviewer.value ? parseModelKey(reviewer.value) : null;
+        changed();
+      });
+      return [
+        h('p', { class: 'help', text: 'Give a chat a project folder (📁 Project, at the top) and its replies work in it as an agent: they read, search, change files and run commands there, as you allow. Every change can be undone, and you can follow and answer it from your phone.' }),
+        field('New project folders start in', mode),
+        field('Second opinion', reviewer, 'Another model checks each change and command before you\'re asked, and the card shows what it thinks. A small model on this computer works well. In modes that don\'t ask, its concerns make the agent ask you.'),
+        field('Dry run', dry, 'Commands that would change files run first in a throwaway copy of the project, and the card shows exactly what they would change. Commands that reach outside the project (git push, ssh, docker, installs) are never tried in a copy.'),
+        h('div', { class: 'field' }, check('Privacy firewall: hide secrets (API keys, tokens, passwords, .env values) from cloud models', a, 'firewall'),
+          h('div', { class: 'help', text: 'Cloud models see «secret-1» instead of the secret, and can still keep it where it is. Models on this computer or your network (Ollama, LM Studio, Tailscale) see everything.' })),
+        field('Private files (only models on your computer or network can read them)', privateFiles, 'One pattern a line, e.g. backups/** or *.sqlite. Keys and certificates (*.pem, *.key, id_rsa, .ssh/) and secrets/ are always private.'),
+        field('Commands always allowed', rules, 'One a line: commands starting like this run without asking (in every mode but Plan only). "Always allow" on a card adds one here.')
+      ];
+    },
     general() {
       const theme = bind(h('select', { class: 'select' },
         h('option', { value: 'system', text: 'Match system' }),
@@ -3989,6 +4227,7 @@ function bindEvents() {
     el.chatMenu.hidden = !el.chatMenu.hidden;
   });
   document.addEventListener('click', () => { el.chatMenu.hidden = true; });
+  el.projectBtn.addEventListener('click', () => openProjectDialog());
   el.chatMenu.addEventListener('click', async (e) => {
     const action = e.target.dataset.action;
     el.chatMenu.hidden = true;
@@ -3997,6 +4236,7 @@ function bindEvents() {
     if (action === 'pin') { S.current.pinned = !S.current.pinned; await saveChatNow(S.current); }
     if (action === 'system') editCustomInstructions();
     if (action === 'export') exportCurrent();
+    if (action === 'agent-undo') undoAgentChange(S.current);
     if (action === 'delete') deleteChat(S.current.id);
   });
 

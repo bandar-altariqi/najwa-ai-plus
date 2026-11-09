@@ -215,7 +215,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, firewall, approv
       const choice = await approve({
         title: `${before == null ? 'Create' : 'Change'} ${rel} (${counts})`,
         command: diff.text.slice(0, MAX_CARD),
-        description: [opinion.note, 'Allow for this chat lets the agent change files without asking until the chat ends.'].filter(Boolean).join('\n'),
+        description: [opinion.note, '"Allow edits for this chat" lets the agent change files in this chat without asking again.'].filter(Boolean).join('\n'),
         choices: ['once', 'session', 'deny'],
         kind: 'edit'
       });

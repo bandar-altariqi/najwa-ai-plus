@@ -784,6 +784,32 @@ textarea.input { resize: vertical; }
 .approval-title { font-weight: 600; margin-bottom: 4px; }
 .approval-why { font-size: 14px; color: var(--text-dim); margin-bottom: 6px; }
 .approval-command { margin: 0 0 8px; padding: 8px 10px; border-radius: 6px; background: var(--bg-code); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Najwa AI Plus: the agent's diffs, to-do list and project folder button. */
+.approval-command.diff { max-height: 420px; overflow: auto; white-space: pre; overflow-wrap: normal; width: 100%; box-sizing: border-box; }
+.approval-command.diff > span { width: max-content; min-width: 100%; }
+.approval-command.diff > span { display: block; min-height: 1.2em; }
+.approval-command .diff-add { color: #1a7f37; background: rgba(46, 160, 67, 0.15); }
+.approval-command .diff-del { color: #cf222e; background: rgba(248, 81, 73, 0.15); }
+.approval-command .diff-hunk { color: var(--accent); }
+.approval-command .diff-file { color: var(--text-dim); font-weight: 600; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .approval-command .diff-add { color: #7ee2a8; }
+  :root:not([data-theme="light"]) .approval-command .diff-del { color: #ff9a92; }
+}
+:root[data-theme="dark"] .approval-command .diff-add { color: #7ee2a8; }
+:root[data-theme="dark"] .approval-command .diff-del { color: #ff9a92; }
+.approval-why { white-space: pre-line; }
+.agent-todo { margin: 0 0 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.agent-todo-head { font-weight: 600; margin-bottom: 4px; color: var(--text-dim); }
+.agent-todo-item { display: flex; gap: 8px; align-items: baseline; }
+.agent-todo-item.done { color: var(--text-dim); }
+.agent-todo-item.done span:last-child { text-decoration: line-through; }
+.agent-todo-item.in_progress { font-weight: 600; }
+.agent-todo-mark { width: 1em; flex: none; text-align: center; }
+.project-btn { cursor: pointer; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.project-btn.on { border-color: var(--accent); color: var(--accent); }
+.project-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.project-modes { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .approval-elsewhere { font-size: 13px; color: var(--text-dim); margin-top: 8px; }
 .approval-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .approval-done { font-size: 13px; color: var(--text-dim); display: flex; gap: 6px; align-items: baseline; }

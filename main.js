@@ -5,7 +5,7 @@
 const { app, BrowserWindow, ipcMain, Menu, shell, dialog, safeStorage, nativeTheme, screen, net, systemPreferences, powerSaveBlocker, Notification } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { Storage } = require('./src/storage');
+const { Storage, DEFAULT_SETTINGS } = require('./src/storage');
 const { nodeFsBackend } = require('./src/backends/node-fs');
 const { PROVIDERS, normalizeMessages } = require('./src/providers');
 const { Sync } = require('./src/sync');
@@ -28,6 +28,11 @@ const { stdioTransport } = require('./src/mcp-stdio');
 const { localApprovals } = require('./src/local-approvals');
 const { desktopBrowser } = require('./src/browser-desktop');
 const { browsingNote } = require('./src/browser-tools');
+const { agentTools } = require('./src/agent/tools');
+const { createFirewall, isLocalModel } = require('./src/agent/firewall');
+const { createCheckpoints } = require('./src/agent/checkpoints');
+const { createReviewer } = require('./src/agent/reviewer');
+const { backgroundJobs } = require('./src/agent/shell');
 const os = require('os');
 
 // Najwa AI Plus: Najwa AI with a full agent harness (src/agent/). It has its
@@ -287,6 +292,88 @@ const connectors = connectorHub({
 });
 const approvals = localApprovals();
 
+// ---- The agent (Najwa AI Plus): a chat with a project folder ----------------
+// Checkpoints (undo) live in the data folder; background commands last while
+// the app runs.
+const checkpoints = createCheckpoints(path.join(dataDir, 'agent-checkpoints'));
+const agentJobs = backgroundJobs();
+
+const textOf = (content) => (typeof content === 'string' ? content : Array.isArray(content) ? content.map((p) => (typeof p === 'string' ? p : p && p.text) || '').join('\n') : '');
+
+// One plain reply from a model (for the second opinion).
+function plainReply(providerId, cfg, req, signal) {
+  const provider = PROVIDERS[providerId];
+  if (!provider) throw new Error(`Unknown provider: ${providerId}`);
+  let text = '';
+  return provider.impl.streamChat(cfg, req, (piece) => { text += piece; }, signal, () => {}).then(() => text);
+}
+
+// Recent project folders that are still there: [{ root, name }].
+function existingProjects(settings) {
+  return ((settings.agent && settings.agent.recent) || []).filter((r) => {
+    try {
+      return fs.statSync(r).isDirectory();
+    } catch {
+      return false;
+    }
+  }).map((root) => ({ root, name: path.basename(root) }));
+}
+
+// A project folder used: first in the list of recent ones (for the phone too).
+async function rememberProject(root) {
+  const settings = await storage.getSettings();
+  const agent = { ...(settings.agent || {}) };
+  agent.recent = [root, ...(agent.recent || []).filter((r) => r !== root)].slice(0, 12);
+  await storage.saveSettings({ ...settings, agent });
+}
+
+async function rememberCommand(start) {
+  const settings = await storage.getSettings();
+  const agent = { ...(settings.agent || {}) };
+  if ((agent.rules || []).includes(start)) return;
+  agent.rules = [...(agent.rules || []), start];
+  await storage.saveSettings({ ...settings, agent });
+}
+
+/**
+ * The agent's tools for a reply in a chat with a project folder.
+ * @param spec { root, mode } from the chat
+ */
+async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal, origin) {
+  const root = path.resolve(String(spec.root || ''));
+  const a = { ...(DEFAULT_SETTINGS.agent || {}), ...(settings.agent || {}) };
+  const privateGlobs = String(a.privateFiles || '').split('\n').map((l) => l.trim()).filter(Boolean);
+  const firewall = createFirewall({ enabled: a.firewall !== false, cloud: !isLocalModel(providerId, cfg), privateGlobs });
+  let reviewer = null;
+  if (a.reviewer && a.reviewer.provider && a.reviewer.model && PROVIDERS[a.reviewer.provider]) {
+    const rcfg = settings.providers[a.reviewer.provider] || {};
+    const rWall = createFirewall({ enabled: a.firewall !== false, cloud: !isLocalModel(a.reviewer.provider, rcfg), privateGlobs });
+    reviewer = createReviewer({
+      label: a.reviewer.model,
+      scrub: (t) => rWall.scrub(t).text,
+      chat: (r, sig) => plainReply(a.reviewer.provider, rcfg, { model: a.reviewer.model, ...r }, sig)
+    });
+  }
+  const lastUser = [...(req.messages || [])].reverse().find((m) => m.role === 'user');
+  const set = agentTools({
+    root,
+    chatId: req.chatId,
+    mode: spec.mode || a.defaultMode || 'ask',
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky' },
+    firewall,
+    approve: approvals.asker(onInfo, signal, origin),
+    chatAllowed: approvals.allowedFor(req.chatId ? `agent:${req.chatId}` : null),
+    checkpoints,
+    reviewer,
+    task: lastUser ? textOf(lastUser.content) : '',
+    jobs: agentJobs,
+    onInfo,
+    onAlways: (start) => rememberCommand(start).catch(() => {})
+  });
+  rememberProject(root).catch(() => {});
+  return set;
+}
+
 async function runChat(providerId, req, onDelta, signal, onInfo) {
   const provider = PROVIDERS[providerId];
   if (!provider) throw new Error(`Unknown provider: ${providerId}`);
@@ -305,11 +392,19 @@ async function runChat(providerId, req, onDelta, signal, onInfo) {
   // Tools for models that can use them (also for the phone, when it uses this
   // computer's models): "Let models use a browser" (this computer's hidden
   // browser), and this computer's connectors.
-  if (TOOL_KINDS[providerId] && (req.browse || req.connectors)) {
+  const agentSpec = req.agent && req.agent.root ? req.agent : null;
+  if (agentSpec && !TOOL_KINDS[providerId]) throw new Error(`${provider.label} can't work in a project folder. Choose a model from Ollama, LM Studio, Claude or OpenAI.`);
+  if (TOOL_KINDS[providerId] && (req.browse || req.connectors || agentSpec)) {
     const sets = [];
     let system = request.system;
     const browser = req.browse ? desktopBrowser() : null;
     try {
+      if (agentSpec) {
+        const origin = { id: await computerId(), name: computerName(), computer: true };
+        const agent = await agentToolset(providerId, cfg, settings, { chatId: req.chatId, messages: request.messages }, agentSpec, onInfo, signal, origin);
+        sets.push(agent);
+        system = system ? `${system}\n\n${agent.system}` : agent.system;
+      }
       if (browser) {
         sets.push(browser);
         system = browsingNote(system, true);
@@ -325,6 +420,7 @@ async function runChat(providerId, req, onDelta, signal, onInfo) {
       if (tools.defs.length) {
         const result = await chatWithTools({ kind: TOOL_KINDS[providerId], cfg, req: { ...request, system }, onDelta, signal, onInfo, tools });
         if (!result.fallback) return result;
+        if (agentSpec) throw new Error(`${req.model} can't use tools, so it can't work in a project folder. Choose a model that can (most recent Qwen, Llama 3.1+, Mistral, Claude and GPT models can).`);
         // Messages sent meanwhile go as the next message.
         if (result.pendingSteer) {
           const plain = await provider.impl.streamChat(cfg, request, onDelta, signal, onInfo);
@@ -390,6 +486,11 @@ const remoteHandlers = {
     sync.run().catch(() => {});
     return true;
   },
+  // The agent from the phone: this computer's recent project folders, and
+  // undoing an agent's changes here.
+  agentProjects: async () => existingProjects(await storage.getSettings()),
+  agentCheckpoints: async (msg) => checkpoints.list(String(msg.chatId || '')),
+  agentUndo: async (msg) => checkpoints.undo(String(msg.chatId || ''), msg.id || null),
   // The phone answering an agent's request for permission.
   approve: async (msg) => {
     // A connector's question this computer asked, answered from the phone.
@@ -683,6 +784,17 @@ function registerIpc() {
 
   ipcMain.handle('ai:approve', async (_e, providerId, _model, payload) => answeredHere(payload, await approveOn(providerId, payload)));
 
+  // The agent (Najwa AI Plus): a chat's project folder, and undoing its changes.
+  ipcMain.handle('agent:pickFolder', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, { title: 'Choose the project folder', properties: ['openDirectory', 'createDirectory'] });
+    if (canceled || !filePaths[0]) return null;
+    await rememberProject(filePaths[0]);
+    return filePaths[0];
+  });
+  ipcMain.handle('agent:recent', async () => existingProjects(await storage.getSettings()));
+  ipcMain.handle('agent:checkpoints', (_e, chatId) => checkpoints.list(String(chatId)));
+  ipcMain.handle('agent:undo', (_e, chatId, id) => checkpoints.undo(String(chatId), id || null));
+
   // Stop a reply a phone asked this computer for (Stop pressed here, in the chat
   // where the reply shows as "Replying on <phone>"). 0 when this computer isn't writing it.
   ipcMain.handle('ai:stopElsewhere', (_e, chatId) => (remote ? remote.stopChat(String(chatId)) : 0));
@@ -795,6 +907,7 @@ app.on('before-quit', (e) => {
 });
 
 app.on('will-quit', () => {
+  agentJobs.stopAll();
   if (voice) voice.stop();
 });
 

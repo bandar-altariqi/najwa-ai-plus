@@ -367,6 +367,16 @@ function remoteComputers({ getKey, getComputers, fetch = globalThis.fetch, probe
     return call(await locate(computer), 'approve', { provider: null, payload }, { timeoutMs: 15000 });
   }
 
+  // Najwa AI Plus: the agent on a computer (its project folders, undo).
+  async function agentOn(computerId, op, payload = {}) {
+    if (!['agentProjects', 'agentCheckpoints', 'agentUndo'].includes(op)) throw new RemoteError('Unknown request.');
+    const computer = ((await getComputers()) || {})[computerId];
+    if (!computer || !computer.enabled || !Array.isArray(computer.addrs)) {
+      throw new RemoteError('That computer isn\'t sharing with this phone right now.');
+    }
+    return call(await locate(computer), op, payload, { timeoutMs: 15000 });
+  }
+
   // Stays connected to every computer that shares its models and calls
   // onChanged({ chats, deleted, settings }) whenever one has put new data in
   // the synced copy, so the phone can sync right away. Runs until `signal`
@@ -466,7 +476,7 @@ function remoteComputers({ getKey, getComputers, fetch = globalThis.fetch, probe
     return told.reduce((a, b) => a + b, 0);
   }
 
-  return { listModels, streamChat, approve, answerOn, locate, call, watch, pushed };
+  return { listModels, streamChat, approve, answerOn, agentOn, locate, call, watch, pushed };
 }
 
 module.exports = { PORT, PATH, MAX_SKEW_MS, RemoteError, linkKey, lock, unlock, lines, remoteComputers, modelName };

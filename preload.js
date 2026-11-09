@@ -220,6 +220,13 @@ contextBridge.exposeInMainWorld('balimda', {
       return () => ipcRenderer.removeListener('ai:event', listener);
     }
   },
+  // The agent (Najwa AI Plus): project folders and undo.
+  agent: {
+    pickFolder: invoke('agent:pickFolder'),
+    recent: invoke('agent:recent'),
+    checkpoints: invoke('agent:checkpoints'),
+    undo: invoke('agent:undo')
+  },
   sync: {
     status: invoke('sync:status'),
     connect: invoke('sync:connect'),

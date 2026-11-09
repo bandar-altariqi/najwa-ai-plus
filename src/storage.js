@@ -22,6 +22,12 @@ const DEFAULT_SETTINGS = {
   readLinks: true,  // open links in the user's messages and give the model the page's text
   browser: true,    // let models (that can use tools) search and browse the web
   connectors: [],   // services models can use (GitHub…); see src/connectors.js. Not synced.
+  // The agent (Najwa AI Plus, src/agent/), on this computer only (not synced):
+  // dry runs ('off', 'risky' or 'always'), the privacy firewall and its extra
+  // private files (one glob a line), commands always allowed, the second
+  // opinion's model ({ provider, model } or null), the mode new projects start
+  // in, and the project folders used lately.
+  agent: { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [] },
   temperature: 0.7,
   maxTokens: 0,
   historyLimit: 0,

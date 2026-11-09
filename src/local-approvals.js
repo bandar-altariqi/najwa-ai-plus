@@ -40,7 +40,9 @@ function localApprovals() {
         if (signal) signal.addEventListener('abort', () => done('deny'), { once: true });
         onInfo({
           kind: 'approval', runId: id, approvalId: null, connectorId: a.connectorId || null, title: a.title, command: a.command, description: a.description,
-          choices: ['once', 'session', 'always', 'deny'], origin
+          choices: Array.isArray(a.choices) && a.choices.length ? a.choices : ['once', 'session', 'always', 'deny'], origin,
+          // The agent's questions (src/agent/tools.js): 'edit' (a diff) or 'command'.
+          ...(a.kind ? { askKind: a.kind } : {})
         });
       });
     },
