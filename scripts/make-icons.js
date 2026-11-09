@@ -6,8 +6,8 @@
 // the Android and iOS launcher icons and splash screens.
 //
 // The mark: a white N, you, over a chat bubble, Najwa answering, with a
-// sparkle for AI, and the word PLUS under it. Plus is deep violet and gold
-// where Najwa AI is navy and rose, so the two apps look apart side by side.
+// sparkle for AI, and the word PLUS under it. Plus is on deep violet where
+// Najwa AI is on navy, so the two apps look apart side by side.
 // build/icon.svg is the same artwork as a vector, for print and the web.
 //
 //   node scripts/make-icons.js      (needs the dev dependency @resvg/resvg-js)
@@ -18,10 +18,10 @@ const zlib = require('zlib');
 const { Resvg } = require('@resvg/resvg-js');
 
 const root = path.resolve(__dirname, '..');
-const NAVY_TOP = '#3f3178';     // violet (Najwa AI: navy #2d4372 → #1c2b4d)
-const NAVY_BOTTOM = '#241a4d';
-const NAVY_FLAT = '#31265f';   // Android's adaptive icon background (one colour)
-const GOLD = '#f2b45c';        // the bubble and PLUS (Najwa AI: rose #e3968d)
+const NAVY_TOP = '#45337f';     // violet (Najwa AI: navy #2d4372 → #1c2b4d)
+const NAVY_BOTTOM = '#271c52';
+const NAVY_FLAT = '#36296a';   // Android's adaptive icon background (one colour)
+const ROSE = '#e3968d';        // the bubble and PLUS
 
 // The mark in a 512×512 design space.
 // PLUS is drawn in round strokes like the N (cap height 44), so no font is needed.
@@ -42,7 +42,7 @@ const plusWord = (color) => {
   return `<g transform="translate(0 362)" fill="none" stroke="${color}" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">${letters}</g>`;
 };
 
-const mark = ({ n = '#ffffff', bubble = GOLD, spark = '#ffffff', word = GOLD } = {}) => `
+const mark = ({ n = '#ffffff', bubble = ROSE, spark = '#ffffff', word = ROSE } = {}) => `
   <g transform="translate(256 214) scale(0.8) translate(-256 -256)"><g transform="translate(-6 -10)">
     <path fill="${bubble}" d="M226 130H346A62 62 0 0 1 408 192V290A62 62 0 0 1 346 352H344L374 402L302 352H226A62 62 0 0 1 164 290V192A62 62 0 0 1 226 130Z"/>
     <path fill="none" stroke="${n}" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" d="M150 362V160L318 362V160"/>
