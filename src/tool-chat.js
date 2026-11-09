@@ -339,8 +339,7 @@ async function toolLoop({ k, cfg, req, w, extra, inbox, working, signal, onInfo,
     extra.push(...turn.assistant);
     w.gap();
     const results = [];
-    for (const [i, call] of turn.calls.entries()) {
-      if (signal && signal.aborted) throw abortError();
+    const runOne = async (call, i) => {
       const id = `${call.id || 'call'}-${step}-${i}`;
       const label = tools.describe(call);
       onInfo({ kind: 'tool', id, emoji: tools.emoji ? tools.emoji(call) : '🌐', label, status: 'running' });
@@ -358,7 +357,18 @@ async function toolLoop({ k, cfg, req, w, extra, inbox, working, signal, onInfo,
       const done = r.label || label;
       onInfo({ kind: 'tool', id, label: r.error && !r.label ? `${done} (didn't work)` : done, relabel: true, status: 'completed' });
       if (r.image) onInfo({ kind: 'shot', src: r.image, label });
-      results.push(r);
+      return r;
+    };
+    // One at a time, except calls a toolset runs side by side (helper agents)
+    // when they come together.
+    const together = (call) => !!(tools.parallel && tools.parallel(call.name));
+    for (let i = 0; i < turn.calls.length;) {
+      if (signal && signal.aborted) throw abortError();
+      let j = i + 1;
+      if (together(turn.calls[i])) while (j < turn.calls.length && together(turn.calls[j])) j++;
+      const batch = turn.calls.slice(i, j);
+      results.push(...(await Promise.all(batch.map((call, n) => runOne(call, i + n)))));
+      i = j;
     }
     extra.push(...k.results(turn.calls, results));
     if (inbox.length) {
@@ -390,6 +400,10 @@ function combineTools(sets) {
     },
     close: () => live.forEach((t) => t.close && t.close()),
     budget: (live.find((t) => t.budget) || {}).budget,
+    parallel: (name) => {
+      const t = owner(name);
+      return !!(t && t.parallel && t.parallel(name));
+    },
     // The largest wins: an agent set asks for more steps and room than a browser.
     maxSteps: Math.max(0, ...live.map((t) => t.maxSteps || 0)) || undefined,
     contextBudget: Math.max(0, ...live.map((t) => t.contextBudget || 0)) || undefined

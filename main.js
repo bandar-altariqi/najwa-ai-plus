@@ -31,6 +31,7 @@ const { browsingNote } = require('./src/browser-tools');
 const { agentTools } = require('./src/agent/tools');
 const { createFirewall, isLocalModel } = require('./src/agent/firewall');
 const { createCheckpoints } = require('./src/agent/checkpoints');
+const { helperRunner } = require('./src/agent/helpers');
 const { expandCommand, listCommands } = require('./src/agent/commands');
 const { createReviewer } = require('./src/agent/reviewer');
 const { backgroundJobs } = require('./src/agent/shell');
@@ -371,7 +372,7 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     root,
     chatId: req.chatId,
     mode: spec.mode || a.defaultMode || 'ask',
-    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}) },
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperRunner({ kind: TOOL_KINDS[providerId], cfg, model: req.model || '', onInfo }) },
     model: req.model || '',
     local: isLocalModel(providerId, cfg),
     firewall,

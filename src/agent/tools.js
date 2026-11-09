@@ -32,6 +32,7 @@ const { createBudget } = require('./budget');
 const { gitTools, GIT_DEFS, GIT_READ_ONLY } = require('./git');
 const { listSkills, loadSkill } = require('./commands');
 const { createHooks, loadHooks } = require('./hooks');
+const { helperView } = require('./helpers');
 
 const MAX_READ_LINES = 2000;
 const MAX_READ_CHARS = 100000;
@@ -138,6 +139,10 @@ const DEFS = {
 };
 
 Object.assign(DEFS, GIT_DEFS, {
+  ask_helper: {
+    description: 'Hand a self-contained question or search job to a helper: the same model with a fresh context and the tools that look (read, search, Git history; it can\'t change anything). Only its answer comes back, so your context stays small. Good for exploring a big codebase ("find every place the login token is checked, with file:line"). Give it everything it needs in the task. Several helpers asked for in one step work at the same time.',
+    parameters: { type: 'object', properties: { task: { type: 'string', description: 'The question or job, complete on its own' } }, required: ['task'] }
+  },
   use_skill: {
     description: 'Load one of the skills listed in your instructions: its full instructions, and the files that come with it. Load a skill when the task matches its description.',
     parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
@@ -165,6 +170,7 @@ function describe(call) {
     case 'stop_command': return `Stopping ${a.id}`;
     case 'todo_write': return 'Updating the to-do list';
     case 'use_skill': return `Using the skill ${quote(a.name, 40)}`;
+    case 'ask_helper': return `Helper: ${quote(a.task, 70)}`;
     case 'git_status': return 'Checking Git status';
     case 'git_diff': return `Looking at the changes${a.path ? ` in ${quote(a.path, 60)}` : ''}`;
     case 'git_log': return 'Reading the Git history';
@@ -174,7 +180,7 @@ function describe(call) {
 }
 
 function emoji(call) {
-  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿', use_skill: '🧩' }[call.name] || '🛠️';
+  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿', use_skill: '🧩', ask_helper: '🤝' }[call.name] || '🛠️';
 }
 
 const isBinary = (buf) => buf.subarray(0, 8000).includes(0);
@@ -369,6 +375,12 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
 
   const tools = {
     ...git,
+    async ask_helper(args, signal) {
+      const task = String(args.task || '').trim();
+      if (!task) return { text: 'Give the helper a task.', error: true };
+      const answer = await options.runHelper(helperView(set, root), task, signal);
+      return { text: see(answer || '(The helper had no answer.)').text, label: `🤝 Helper: ${quote(task, 60)}` };
+    },
     use_skill(args) {
       const skill = loadSkill(skills, args.name, root);
       if (!skill) return { text: `There's no skill called ${args.name}. Skills: ${skills.map((s) => s.name).join(', ') || 'none'}.`, error: true };
@@ -559,8 +571,9 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     }
   };
 
-  return {
-    defs: Object.entries(DEFS).filter(([name]) => name !== 'use_skill' || skills.length).map(([name, d]) => ({ name, ...d })),
+  const set = {
+    defs: Object.entries(DEFS).filter(([name]) => (name !== 'use_skill' || skills.length) && (name !== 'ask_helper' || options.runHelper)).map(([name, d]) => ({ name, ...d })),
+    parallel: (name) => name === 'ask_helper',
     owns: (name) => Object.prototype.hasOwnProperty.call(DEFS, name),
     describe,
     emoji,
@@ -591,6 +604,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     contextBudget: 300000,
     hidden: () => hidden
   };
+  return set;
 }
 
 module.exports = { agentTools, DEFS, describe };

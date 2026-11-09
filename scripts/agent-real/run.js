@@ -23,6 +23,7 @@ const { createCheckpoints } = require('../../src/agent/checkpoints');
 const { createReviewer } = require('../../src/agent/reviewer');
 const { backgroundJobs } = require('../../src/agent/shell');
 const { expandCommand } = require('../../src/agent/commands');
+const { helperRunner } = require('../../src/agent/helpers');
 const { PROVIDERS } = require('../../src/providers');
 
 const KIND = process.env.KIND || 'openaiCompatible';
@@ -285,6 +286,24 @@ const TASKS = {
       };
     }
   },
+  // Helper agents: two separate searches, handed out.
+  helpers: {
+    files: Object.fromEntries([
+      ...Array.from({ length: 12 }, (_, i) => [`src/mod${i}.js`, `// Module ${i}\nexports.run${i} = () => ${i};\n`]),
+      ['src/client.js', "const key = process.env.PAY_KEY;\nexports.call = async (url) => {\n  for (let attempt = 0; attempt < 3; attempt++) {\n    try { return await fetch(url, { headers: { k: key } }); } catch {}\n  }\n};\n"],
+      ['src/admin/report.js', "exports.report = () => ({ key: process.env.PAY_KEY.slice(0, 4) });\n"],
+      ['src/jobs/sync.js', "const retry = require('../util/retry');\nexports.sync = () => retry(() => 1, 5);\n"],
+      ['src/util/retry.js', "module.exports = (fn, times) => { for (let i = 0; i < times; i++) { try { return fn(); } catch {} } };\n"]
+    ]),
+    ask: 'Two questions, use helpers for them: (1) where is PAY_KEY read? (2) where does the code retry things? Give file paths.',
+    mode: 'ask',
+    check: (root, log) => ({
+      'used helpers': log.calls.filter((c) => c.name === 'ask_helper').length >= 2,
+      'PAY_KEY places': /client\.js/.test(log.text) && /report\.js/.test(log.text),
+      'retry places': /retry\.js/.test(log.text) && /sync\.js/.test(log.text) && /client\.js/.test(log.text),
+      'changed nothing': log.cards.length === 0
+    })
+  },
   // The budget guard: a tiny token budget, and "Stop" at its question.
   'budget-stop': {
     files: {
@@ -347,7 +366,7 @@ async function runTask(name, task) {
     root,
     chatId: `real-${name}`,
     mode: task.mode,
-    options: { rules: [], dryRun: 'risky', prices: process.env.PRICES || '', skillDirs: [], ...(task.options || {}) },
+    options: { rules: [], dryRun: 'risky', prices: process.env.PRICES || '', skillDirs: [], runHelper: helperRunner({ kind: KIND, cfg, model: MODEL, onInfo: (i) => onInfo(i) }), ...(task.options || {}) },
     model: MODEL,
     firewall,
     approve: async (card) => {
