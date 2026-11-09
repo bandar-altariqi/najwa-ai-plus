@@ -54,3 +54,23 @@ test('compaction: short chats as they are; long ones summarised, newest kept', a
   const none = await compactMessages({ chatId: 'd', messages: msgs, summarize: async () => '', store, limit: 10000 });
   assert.strictEqual(none.messages, msgs);
 });
+
+test('compaction: a kept summary stays while what came after is small (prompt caching keeps working)', async () => {
+  const store = summaryStore(fs.mkdtempSync(path.join(os.tmpdir(), 'najwa-compact2-')));
+  let calls = 0;
+  const summarize = async () => `Summary #${++calls}`;
+  const msgs = chat(20);   // 20 KB > 14 KB: summarised, the newest 6 kept
+  const first = await compactMessages({ chatId: 'c', messages: msgs, summarize, store, limit: 14000 });
+  assert.strictEqual(calls, 1);
+  // Two short turns later: the same summary, everything after it in full.
+  const later = [...msgs, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'and now?' }];
+  const again = await compactMessages({ chatId: 'c', messages: later, summarize, store, limit: 14000 });
+  assert.strictEqual(calls, 1);
+  assert.deepStrictEqual(again.messages.slice(0, 2), first.messages.slice(0, 2));   // the same start, so it stays cached
+  assert.strictEqual(again.messages.length, 2 + 8);
+  assert.strictEqual(again.usage, null);
+  // Once what came after passes half the limit, the summary is extended.
+  const grown = [...later, ...chat(4)];
+  await compactMessages({ chatId: 'c', messages: grown, summarize, store, limit: 14000 });
+  assert.strictEqual(calls, 2);
+});

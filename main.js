@@ -460,6 +460,7 @@ async function runChatInner(providerId, req, onDelta, signal, onInfo) {
     throw new Error('Local only is on (Settings → Agent): choose a model on this computer or your network for this project, or turn it off.');
   }
   // Compaction: a long agent chat's older messages go to the model as a summary.
+  let compactUsage = null;
   if (agentSpec && TOOL_KINDS[providerId] && req.chatId) {
     const res = await compactMessages({
       chatId: req.chatId,
@@ -469,6 +470,7 @@ async function runChatInner(providerId, req, onDelta, signal, onInfo) {
       summarize: (text) => plainReply(providerId, cfg, { model: request.model, system: SUMMARY_SYSTEM, messages: [{ role: 'user', content: text }], maxTokens: 2000, temperature: 0 }, signal)
     }).catch(() => ({ messages: request.messages, compacted: 0 }));
     request.messages = res.messages;
+    compactUsage = res.usage || null;
   }
   if (agentSpec && !TOOL_KINDS[providerId]) throw new Error(`${provider.label} can't work in a project folder. Choose a model from Ollama, LM Studio, Claude or OpenAI.`);
   if (TOOL_KINDS[providerId] && (req.browse || req.connectors || agentSpec)) {
@@ -480,6 +482,7 @@ async function runChatInner(providerId, req, onDelta, signal, onInfo) {
         const origin = { id: await computerId(), name: computerName(), computer: true };
         const agent = await agentToolset(providerId, cfg, settings, { chatId: req.chatId, messages: request.messages, model: request.model }, agentSpec, onInfo, signal, origin);
         sets.push(agent);
+        if (compactUsage) agent.budget.add(compactUsage);
         system = system ? `${system}\n\n${agent.system}` : agent.system;
       }
       if (browser) {

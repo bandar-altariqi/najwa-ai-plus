@@ -47,6 +47,12 @@ function summaryStore(dir) {
   };
 }
 
+const withSummary = (summary, count, rest) => [
+  { role: 'user', content: `[The earlier part of this conversation (${count} messages), summarised to make room. Ask the user if something you need is missing.]\n\n${summary}` },
+  { role: 'assistant', content: 'Understood. I\'ll carry on from there.' },
+  ...rest
+];
+
 /**
  * The messages for the model: as they are when short; else a summary of the
  * older ones (kept and extended in `store`) and the newest ones.
@@ -55,35 +61,43 @@ function summaryStore(dir) {
  */
 async function compactMessages({ chatId, messages, summarize, store = null, limit = COMPACT_AT, keep = KEEP, onStatus = () => {} }) {
   if (!chatId || messages.length <= keep + 1 || sizeOf(messages) <= limit) return { messages, compacted: 0 };
+  const saved = store && store.get(chatId);
+  // A kept summary stays as it is while what came after it is under half the
+  // limit: no summary call each turn, and the start of what the model gets
+  // doesn't change, so providers' prompt caching keeps working (cached input
+  // is far cheaper, so a summary rewritten every turn can cost more than it saves).
+  if (saved && saved.count < messages.length && saved.digest === digest(messages.slice(0, saved.count)) && sizeOf(messages.slice(saved.count)) <= limit / 2) {
+    return { messages: withSummary(saved.summary, saved.count, messages.slice(saved.count)), compacted: saved.count, usage: null };
+  }
   // The kept part starts with a message of the user's.
   let cut = messages.length - keep;
   while (cut > 1 && messages[cut].role !== 'user') cut--;
   if (cut < 2) return { messages, compacted: 0 };
   const older = messages.slice(0, cut);
-  const saved = store && store.get(chatId);
   let summary = null;
+  let sent = 0;
+  const ask = (text) => {
+    sent = text.length + SUMMARY_SYSTEM.length;
+    return summarize(text);
+  };
   if (saved && saved.count <= older.length && saved.digest === digest(older.slice(0, saved.count))) {
     if (saved.count === older.length) summary = saved.summary;
     else {
       onStatus('Updating the summary of the earlier conversation…');
-      summary = await summarize(`Summary so far:\n${saved.summary}\n\nWhat came after:\n${transcript(older.slice(saved.count))}`);
+      summary = await ask(`Summary so far:\n${saved.summary}\n\nWhat came after:\n${transcript(older.slice(saved.count))}`);
     }
   } else {
     onStatus('Summarising the earlier conversation to make room…');
-    summary = await summarize(transcript(older));
+    summary = await ask(transcript(older));
   }
   summary = String(summary || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim().slice(0, MAX_SUMMARY);
   if (!summary) return { messages, compacted: 0 };
   if (store) store.set(chatId, { count: older.length, digest: digest(older), summary });
   onStatus('');
-  return {
-    messages: [
-      { role: 'user', content: `[The earlier part of this conversation (${older.length} messages), summarised to make room. Ask the user if something you need is missing.]\n\n${summary}` },
-      { role: 'assistant', content: 'Understood. I\'ll carry on from there.' },
-      ...messages.slice(cut)
-    ],
-    compacted: older.length
-  };
+  // What writing the summary cost, for the task's budget (estimated: about 4
+  // characters a token; nothing when the kept summary was reused).
+  const usage = sent ? { input: Math.ceil(sent / 4), output: Math.ceil(summary.length / 4) } : null;
+  return { messages: withSummary(summary, older.length, messages.slice(cut)), compacted: older.length, usage };
 }
 
 module.exports = { compactMessages, summaryStore, SUMMARY_SYSTEM, COMPACT_AT, KEEP };

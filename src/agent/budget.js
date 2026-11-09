@@ -8,21 +8,25 @@
 //
 // Prices are the user's own (Settings → Agent), per million tokens, one model
 // per line:   deepseek-flash = 0.1 / 0.4      (input / output, in dollars)
+// or with a third price for input the provider had cached (prompt caching,
+// usually much cheaper):   deepseek-flash = 0.1 / 0.4 / 0.01
+// Without it, cached input is counted at the input price (never less than the bill).
 // A trailing * matches the start of a name (claude-* = 3 / 15). A model with
 // no price counts tokens only; local models cost nothing.
 
 'use strict';
 
-/** "model = in / out" lines -> [{ pattern, input, output }] */
+/** "model = in / out [/ cached]" lines -> [{ pattern, input, output, cached }] */
 function parsePrices(text) {
   const out = [];
   for (const raw of String(text || '').split('\n')) {
     const line = raw.replace(/#.*/, '').trim();
-    const m = /^(.+?)\s*[=:]\s*\$?([\d.]+)\s*\/\s*\$?([\d.]+)\s*$/.exec(line);
+    const m = /^(.+?)\s*[=:]\s*\$?([\d.]+)\s*\/\s*\$?([\d.]+)\s*(?:\/\s*\$?([\d.]+)\s*)?$/.exec(line);
     if (!m) continue;
     const input = Number(m[2]);
     const output = Number(m[3]);
-    if (Number.isFinite(input) && Number.isFinite(output)) out.push({ pattern: m[1].trim(), input, output });
+    const cached = m[4] != null ? Number(m[4]) : input;
+    if (Number.isFinite(input) && Number.isFinite(output) && Number.isFinite(cached)) out.push({ pattern: m[1].trim(), input, output, cached });
   }
   return out;
 }
@@ -50,13 +54,13 @@ const fmtUsd = (n) => `$${n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2)}`;
  * @param onInfo    gets { kind: 'usage', ... } after each step
  */
 function createBudget({ model, local = false, prices = '', capUsd = 0, capTokens = 0, approve, onInfo = () => {} }) {
-  const price = local ? { input: 0, output: 0 } : priceFor(parsePrices(prices), model);
-  const total = { input: 0, output: 0, steps: 0 };
+  const price = local ? { input: 0, output: 0, cached: 0 } : priceFor(parsePrices(prices), model);
+  const total = { input: 0, output: 0, cached: 0, steps: 0 };
   let usd = 0;
   let allowUsd = capUsd > 0 ? capUsd : 0;
   let allowTokens = capTokens > 0 ? capTokens : 0;
 
-  const summary = () => `${fmtTokens(total.input + total.output)} tokens (${fmtTokens(total.input)} in, ${fmtTokens(total.output)} out)${price ? `, about ${fmtUsd(usd)}` : ''}`;
+  const summary = () => `${fmtTokens(total.input + total.output)} tokens (${fmtTokens(total.input)} in${total.cached ? `, ${fmtTokens(total.cached)} of them cached` : ''}, ${fmtTokens(total.output)} out)${price ? `, about ${fmtUsd(usd)}` : ''}`;
 
   return {
     get usd() {
@@ -65,17 +69,23 @@ function createBudget({ model, local = false, prices = '', capUsd = 0, capTokens
     get tokens() {
       return total.input + total.output;
     },
+    get totals() {
+      return { ...total };
+    },
     summary,
     /** One step's usage: { input, output, cached } (any may be missing). */
     add(usage) {
       if (!usage) return;
       const input = Math.max(0, Number(usage.input) || 0);
       const output = Math.max(0, Number(usage.output) || 0);
+      // Input the provider had cached (prompt caching): its own, cheaper price.
+      const cached = Math.min(input, Math.max(0, Number(usage.cached) || 0));
       total.input += input;
       total.output += output;
+      total.cached += cached;
       total.steps++;
-      if (price) usd += (input * price.input + output * price.output) / 1e6;
-      onInfo({ kind: 'usage', input: total.input, output: total.output, usd: price ? usd : null, capUsd: allowUsd || null, capTokens: allowTokens || null });
+      if (price) usd += ((input - cached) * price.input + cached * (price.cached != null ? price.cached : price.input) + output * price.output) / 1e6;
+      onInfo({ kind: 'usage', input: total.input, output: total.output, cached: total.cached, usd: price ? usd : null, capUsd: allowUsd || null, capTokens: allowTokens || null });
     },
     /** Over the cap? Ask; resolves true to go on, false to stop. */
     async check() {

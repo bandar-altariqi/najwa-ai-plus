@@ -11,7 +11,7 @@ const { createBudget, parsePrices, priceFor } = require('../src/agent/budget');
 test('budget: prices from the settings text', () => {
   const prices = parsePrices('deepseek-flash = 0.1 / 0.4\n# a note\nclaude-* : $3 / $15\nclaude-opus-* = 15/75\nnonsense\n');
   assert.strictEqual(prices.length, 3);
-  assert.deepStrictEqual(priceFor(prices, 'deepseek-flash'), { pattern: 'deepseek-flash', input: 0.1, output: 0.4 });
+  assert.deepStrictEqual(priceFor(prices, 'deepseek-flash'), { pattern: 'deepseek-flash', input: 0.1, output: 0.4, cached: 0.1 });   // no cached price: the input price
   assert.strictEqual(priceFor(prices, 'claude-opus-5').input, 15);   // the longest prefix wins
   assert.strictEqual(priceFor(prices, 'claude-sonnet-5').input, 3);
   assert.strictEqual(priceFor(prices, 'gpt-x'), null);
@@ -24,7 +24,7 @@ test('budget: counts, shows, and asks at the cap', async () => {
   const b = createBudget({ model: 'm', prices: 'm = 1 / 2', capUsd: 0.01, approve: async (card) => { asked.push(card); return answer; }, onInfo: (i) => infos.push(i) });
   b.add({ input: 2000, output: 1000 });   // 0.002 + 0.002
   assert.ok(Math.abs(b.usd - 0.004) < 1e-9);
-  assert.deepStrictEqual(infos[0], { kind: 'usage', input: 2000, output: 1000, usd: b.usd, capUsd: 0.01, capTokens: null });
+  assert.deepStrictEqual(infos[0], { kind: 'usage', input: 2000, output: 1000, cached: 0, usd: b.usd, capUsd: 0.01, capTokens: null });
   assert.strictEqual(await b.check(), true);
   assert.strictEqual(asked.length, 0);
   b.add({ input: 6000, output: 1000 });   // 0.012 in all
@@ -51,4 +51,14 @@ test('budget: tokens without a price, and local models are free', async () => {
   assert.strictEqual(local.usd, 0);
   assert.strictEqual(await local.check(), true);
   createBudget({ model: 'x', approve: async () => 'once' }).add(null);   // a step without usage
+});
+
+test('budget: cached input at its own price', () => {
+  assert.deepStrictEqual(parsePrices('deepseek-* = 0.28 / 0.42 / 0.028')[0], { pattern: 'deepseek-*', input: 0.28, output: 0.42, cached: 0.028 });
+  const b = createBudget({ model: 'deepseek-flash', prices: 'deepseek-* = 1 / 2 / 0.1', approve: async () => 'once' });
+  b.add({ input: 10000, output: 1000, cached: 8000 });   // 2000 × 1 + 8000 × 0.1 + 1000 × 2
+  assert.ok(Math.abs(b.usd - 0.0048) < 1e-12);
+  b.add({ input: 100, cached: 500 });   // never more cached than input
+  assert.strictEqual(b.totals.cached, 8100);
+  assert.match(b.summary(), /10\.1k in, 8\.1k of them cached/);
 });

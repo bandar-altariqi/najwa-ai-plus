@@ -1330,7 +1330,7 @@ function agentEvent(chat, msg, evt) {
   } else if (evt.kind === 'usage') {
     // Budget guard (Najwa AI Plus): the task's tokens and cost so far.
     const n = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
-    msg.usage = { input: n(evt.input) || 0, output: n(evt.output) || 0, usd: n(evt.usd), capUsd: n(evt.capUsd), capTokens: n(evt.capTokens) };
+    msg.usage = { input: n(evt.input) || 0, output: n(evt.output) || 0, cached: n(evt.cached) || 0, usd: n(evt.usd), capUsd: n(evt.capUsd), capTokens: n(evt.capTokens) };
   } else if (evt.kind === 'todo' && Array.isArray(evt.items)) {
     // The agent's to-do list (Najwa AI Plus); a step it finishes is read aloud.
     const before = new Set((msg.todo || []).filter((i) => i.status === 'done').map((i) => i.text));
@@ -1470,10 +1470,10 @@ function usageLine(msg) {
   if (!u) return null;
   const k = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
   const usd = (n) => `$${n > 0 && n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
-  const parts = [`${k(u.input + u.output)} tokens`];
+  const parts = [`${k(u.input + u.output)} tokens${u.cached ? ` (${Math.round((u.cached / Math.max(1, u.input)) * 100)}% of input cached)` : ''}`];
   if (u.usd != null) parts.push(`about ${usd(u.usd)}${u.capUsd ? ` of ${usd(u.capUsd)}` : ''}`);
   else if (u.capTokens) parts.push(`budget ${k(u.capTokens)}`);
-  return h('div', { class: 'agent-usage', title: `${u.input} in, ${u.output} out`, text: `💰 ${parts.join(' · ')}` });
+  return h('div', { class: 'agent-usage', title: `${u.input} in (${u.cached || 0} cached), ${u.output} out`, text: `💰 ${parts.join(' · ')}` });
 }
 
 function agentSteps(msg) {
@@ -3741,7 +3741,7 @@ function openSettings(tab = 'general') {
         field('Machines (homelab)', h('div', {}, machines, api.agent && api.agent.tailscale ? findTailscale : null), 'The agent can work on these over SSH (your keys; it never types a password), one a line: name = user@host : look, ask or auto. look: only commands that look (docker ps, df, logs). ask: changes are asked. auto: changes run, risky ones (deleting containers or data, reboots) are still asked.'),
         field('Budget per task, in dollars', budgetUsd, 'When a task reaches it, the agent stops and asks before spending more. Needs the model\'s price below.'),
         field('Budget per task, in tokens', budgetTokens, 'The same, counted in tokens (works without prices, for any model).'),
-        field('Model prices', prices, 'Dollars per million tokens, input / output, one model a line. A * at the end matches the start of a name. Models on this computer cost nothing. Each task shows its tokens and cost as it works.')
+        field('Model prices', prices, 'Dollars per million tokens, input / output, one model a line; add a third price for cached input (prompt caching, usually cheaper): deepseek-flash = 0.1 / 0.4 / 0.01. A * at the end matches the start of a name. Models on this computer cost nothing. Each task shows its tokens and cost as it works.')
       ];
     },
     general() {

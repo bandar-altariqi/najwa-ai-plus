@@ -66,7 +66,7 @@ const anthropicKind = {
       // The whole answer goes back, thinking included (Claude needs it to go on).
       assistant: [{ role: 'assistant', content: final.content }],
       stopReason: final.stop_reason,
-      usage: final.usage ? { input: (final.usage.input_tokens || 0) + (final.usage.cache_read_input_tokens || 0) + (final.usage.cache_creation_input_tokens || 0), output: final.usage.output_tokens || 0 } : null
+      usage: final.usage ? { input: (final.usage.input_tokens || 0) + (final.usage.cache_read_input_tokens || 0) + (final.usage.cache_creation_input_tokens || 0), output: final.usage.output_tokens || 0, cached: final.usage.cache_read_input_tokens || 0 } : null
     };
   },
 
@@ -127,7 +127,7 @@ const openaiKind = (compatible) => ({
         continue;
       }
       if (evt.error) throw new Error(evt.error.message || JSON.stringify(evt.error));
-      if (evt.usage) usage = { input: evt.usage.prompt_tokens || 0, output: evt.usage.completion_tokens || 0 };
+      if (evt.usage) usage = { input: evt.usage.prompt_tokens || 0, output: evt.usage.completion_tokens || 0, cached: (evt.usage.prompt_tokens_details && evt.usage.prompt_tokens_details.cached_tokens) || evt.usage.prompt_cache_hit_tokens || 0 };
       const choice = evt.choices && evt.choices[0];
       const delta = (choice && choice.delta) || {};
       const thought = delta.reasoning_content || delta.reasoning;
