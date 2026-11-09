@@ -32,6 +32,7 @@ const { agentTools } = require('./src/agent/tools');
 const { createFirewall, isLocalModel } = require('./src/agent/firewall');
 const { createCheckpoints } = require('./src/agent/checkpoints');
 const { helperRunner, chooseHelper } = require('./src/agent/helpers');
+const { tailscaleMachines } = require('./src/agent/homelab');
 const { expandCommand, listCommands } = require('./src/agent/commands');
 const { createReviewer } = require('./src/agent/reviewer');
 const { backgroundJobs } = require('./src/agent/shell');
@@ -382,7 +383,7 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     root,
     chatId: req.chatId,
     mode: spec.mode || a.defaultMode || 'ask',
-    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperFor(providerId, cfg, req.model || '', a, settings, onInfo) },
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperFor(providerId, cfg, req.model || '', a, settings, onInfo), machines: a.machines || '' },
     model: req.model || '',
     local: isLocalModel(providerId, cfg),
     firewall,
@@ -829,6 +830,17 @@ function registerIpc() {
     return filePaths[0];
   });
   ipcMain.handle('agent:recent', async () => existingProjects(await storage.getSettings()));
+  // Homelab: this computer's Tailscale machines, to add in Settings → Agent.
+  ipcMain.handle('agent:tailscale', () => new Promise((resolve) => {
+    require('child_process').execFile('tailscale', ['status', '--json'], { timeout: 10000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
+      if (err) return resolve({ error: err.code === 'ENOENT' ? 'Tailscale isn\'t installed on this computer.' : 'Tailscale didn\'t answer. Is it running and signed in?' });
+      try {
+        resolve({ machines: tailscaleMachines(stdout) });
+      } catch {
+        resolve({ error: 'Tailscale\'s answer couldn\'t be read.' });
+      }
+    });
+  }));
   ipcMain.handle('agent:commands', (_e, root) => listCommands(path.resolve(String(root || '')), [agentDir]).map(({ name, description }) => ({ name, description })));
   ipcMain.handle('agent:checkpoints', (_e, chatId) => checkpoints.list(String(chatId)));
   ipcMain.handle('agent:undo', (_e, chatId, id) => checkpoints.undo(String(chatId), id || null));

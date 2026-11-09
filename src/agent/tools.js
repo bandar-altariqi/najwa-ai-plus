@@ -33,6 +33,7 @@ const { gitTools, GIT_DEFS, GIT_READ_ONLY } = require('./git');
 const { listSkills, loadSkill } = require('./commands');
 const { createHooks, loadHooks } = require('./hooks');
 const { helperView } = require('./helpers');
+const { homelabTools, parseMachines, HOMELAB_DEFS } = require('./homelab');
 
 const MAX_READ_LINES = 2000;
 const MAX_READ_CHARS = 100000;
@@ -138,7 +139,7 @@ const DEFS = {
   }
 };
 
-Object.assign(DEFS, GIT_DEFS, {
+Object.assign(DEFS, GIT_DEFS, HOMELAB_DEFS, {
   ask_helper: {
     description: 'Hand a self-contained question or search job to a helper: the same model with a fresh context and the tools that look (read, search, Git history; it can\'t change anything). Only its answer comes back, so your context stays small. Good for exploring a big codebase ("find every place the login token is checked, with file:line"). Give it everything it needs in the task. Several helpers asked for in one step work at the same time.',
     parameters: { type: 'object', properties: { task: { type: 'string', description: 'The question or job, complete on its own' } }, required: ['task'] }
@@ -149,7 +150,7 @@ Object.assign(DEFS, GIT_DEFS, {
   }
 });
 
-const READ_ONLY = new Set(['list_files', 'read_file', 'find_files', 'search_files', 'command_output', 'todo_write', 'use_skill', ...GIT_READ_ONLY]);
+const READ_ONLY = new Set(['list_files', 'read_file', 'find_files', 'search_files', 'command_output', 'todo_write', 'use_skill', 'list_machines', ...GIT_READ_ONLY]);
 
 const quote = (s, n = 60) => {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
@@ -171,6 +172,8 @@ function describe(call) {
     case 'todo_write': return 'Updating the to-do list';
     case 'use_skill': return `Using the skill ${quote(a.name, 40)}`;
     case 'ask_helper': return `Helper: ${quote(a.task, 70)}`;
+    case 'list_machines': return 'Listing the machines';
+    case 'run_on_machine': return `On ${quote(a.machine, 30)}: ${quote(a.command, 60)}`;
     case 'git_status': return 'Checking Git status';
     case 'git_diff': return `Looking at the changes${a.path ? ` in ${quote(a.path, 60)}` : ''}`;
     case 'git_log': return 'Reading the Git history';
@@ -180,7 +183,7 @@ function describe(call) {
 }
 
 function emoji(call) {
-  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿', use_skill: '🧩', ask_helper: '🤝' }[call.name] || '🛠️';
+  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿', use_skill: '🧩', ask_helper: '🤝', list_machines: '🏠', run_on_machine: '🏠' }[call.name] || '🛠️';
 }
 
 const isBinary = (buf) => buf.subarray(0, 8000).includes(0);
@@ -373,8 +376,13 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
   // Skills (commands.js): the project's and the app's.
   const skills = listSkills(root, options.skillDirs || []);
 
+  // The user's machines (homelab.js), when there are any.
+  const machines = parseMachines(options.machines || '');
+  const homelab = homelabTools({ machines, mode: perms.mode, approve, see, run: options.sshRun, secondOpinion });
+
   const tools = {
     ...git,
+    ...homelab,
     async ask_helper(args, signal) {
       const task = String(args.task || '').trim();
       if (!task) return { text: 'Give the helper a task.', error: true };
@@ -572,7 +580,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
   };
 
   const set = {
-    defs: Object.entries(DEFS).filter(([name]) => (name !== 'use_skill' || skills.length) && (name !== 'ask_helper' || options.runHelper)).map(([name, d]) => ({ name, ...d })),
+    defs: Object.entries(DEFS).filter(([name]) => (name !== 'use_skill' || skills.length) && (name !== 'ask_helper' || options.runHelper) && (!['list_machines', 'run_on_machine'].includes(name) || machines.length)).map(([name, d]) => ({ name, ...d })),
     parallel: (name) => name === 'ask_helper',
     owns: (name) => Object.prototype.hasOwnProperty.call(DEFS, name),
     describe,
@@ -599,7 +607,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     close() {},
     // Budget guard (src/agent/budget.js): the task's tokens and cost, and its cap.
     budget: createBudget({ model, local, prices: options.prices || '', capUsd: Number(options.budgetUsd) || 0, capTokens: Number(options.budgetTokens) || 0, approve, onInfo }),
-    system: agentPrompt({ root, mode: perms.mode, firewall: firewall.active, dryRun: dryRunSetting !== 'off', reviewer: !!reviewer, skills, hooks: !!loadHooks(root) }),
+    system: agentPrompt({ root, mode: perms.mode, firewall: firewall.active, dryRun: dryRunSetting !== 'off', reviewer: !!reviewer, skills, hooks: !!loadHooks(root), machines }),
     maxSteps: 150,
     contextBudget: 300000,
     hidden: () => hidden

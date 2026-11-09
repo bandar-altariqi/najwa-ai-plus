@@ -52,7 +52,7 @@ function platformName() {
  * The agent's part of the system prompt.
  * @param firewall  the privacy firewall is hiding secrets from this model
  */
-function agentPrompt({ root, mode, firewall, dryRun, reviewer, skills = [], hooks = false }) {
+function agentPrompt({ root, mode, firewall, dryRun, reviewer, skills = [], hooks = false, machines = [] }) {
   const branch = gitBranch(root);
   const shell = process.platform === 'win32' ? 'cmd.exe (Windows)' : (process.env.SHELL || '/bin/sh');
   const lines = [
@@ -80,6 +80,10 @@ function agentPrompt({ root, mode, firewall, dryRun, reviewer, skills = [], hook
   if (dryRun) lines.push('Commands that change files may first be tried in a copy of the project, so the user can see the result before it\'s applied.');
   if (reviewer) lines.push('A second model reviews your changes and commands before the user sees them.');
   if (hooks) lines.push('This project has hooks (.najwa/hooks.json): commands that run around your tools. One may stop a tool and say why, or add notes (like lint errors) to its result: follow them.');
+  if (machines.length) {
+    lines.push('', 'The user\'s machines, which you can work on with run_on_machine (over SSH; commands that only look always run, others follow each machine\'s permission):');
+    for (const m of machines.slice(0, 30)) lines.push(`- ${m.name} (${m.host}): ${m.access === 'look' ? 'look only' : m.access === 'auto' ? 'can change things; risky commands are asked' : 'changes are asked'}`);
+  }
   if (skills.length) {
     lines.push('', 'Skills you can load with use_skill when a task matches (the full instructions come with it):');
     for (const s of skills.slice(0, 40)) lines.push(`- ${s.name}: ${s.description}`);

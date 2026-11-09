@@ -225,6 +225,7 @@ contextBridge.exposeInMainWorld('balimda', {
     pickFolder: invoke('agent:pickFolder'),
     recent: invoke('agent:recent'),
     commands: invoke('agent:commands'),
+    tailscale: invoke('agent:tailscale'),
     checkpoints: invoke('agent:checkpoints'),
     undo: invoke('agent:undo')
   },

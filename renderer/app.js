@@ -3478,7 +3478,7 @@ function openSettings(tab = 'general') {
   const views = {
     // Najwa AI Plus: how the agent works in project folders (this computer only).
     agent() {
-      s.agent = { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], budgetUsd: 0, budgetTokens: 0, prices: '', helperModel: null, localOnly: false, ...(s.agent || {}) };
+      s.agent = { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], budgetUsd: 0, budgetTokens: 0, prices: '', helperModel: null, localOnly: false, machines: '', ...(s.agent || {}) };
       const a = s.agent;
       const mode = bind(h('select', { class: 'select' }, AGENT_MODES.map(([id, label, help]) => h('option', { value: id, text: `${label}: ${help}` }))), a, 'defaultMode');
       mode.value = a.defaultMode || 'ask';
@@ -3497,6 +3497,22 @@ function openSettings(tab = 'general') {
       const budgetUsd = bind(h('input', { class: 'input', type: 'text', inputmode: 'decimal', dir: 'ltr', placeholder: 'No limit', value: a.budgetUsd ? String(a.budgetUsd) : '' }), a, 'budgetUsd', num);
       const budgetTokens = bind(h('input', { class: 'input', type: 'text', inputmode: 'numeric', dir: 'ltr', placeholder: 'No limit', value: a.budgetTokens ? String(a.budgetTokens) : '' }), a, 'budgetTokens', num);
       const prices = bind(h('textarea', { class: 'input', rows: 3, dir: 'ltr', placeholder: 'deepseek-flash = 0.1 / 0.4\nclaude-* = 3 / 15', value: a.prices || '' }), a, 'prices');
+      const machines = bind(h('textarea', { class: 'input', rows: 3, dir: 'ltr', placeholder: 'nas = admin@nas.tailnet.ts.net : look\npi = pi@192.168.1.20 : ask\nlab = root@lab : auto', value: a.machines || '' }), a, 'machines');
+      const findTailscale = h('button', {
+        class: 'btn',
+        type: 'button',
+        text: 'Find Tailscale machines',
+        onclick: async () => {
+          const r = await api.agent.tailscale();
+          if (r.error) return toast(r.error, 6000);
+          const have = new Set((a.machines || '').split('\n').map((l) => l.split('=')[0].trim().toLowerCase()));
+          const add = r.machines.filter((m) => !have.has(m.name.toLowerCase())).map((m) => `${m.name} = ${m.host} : look${m.online ? '' : '   # offline now'}`);
+          if (!add.length) return toast('No new Tailscale machines.');
+          machines.value = [machines.value.trim(), ...add].filter(Boolean).join('\n');
+          machines.dispatchEvent(new Event('input'));
+          toast(`Added ${add.length} machine${add.length === 1 ? '' : 's'}, set to look only. Add user@ if SSH needs it, and change look to ask or auto to let the agent change things.`, 8000);
+        }
+      });
       const helperModel = h('select', { class: 'select' },
         h('option', { value: '', text: 'The same model as the agent' }),
         ...allModels().filter((m) => m.provider !== 'hermes' && m.provider !== 'onDevice').map((m) => h('option', { value: modelKey(m), text: `${displayModel(m.model)} (${providerLabel(m.provider)})` })));
@@ -3525,6 +3541,7 @@ function openSettings(tab = 'general') {
           h('div', { class: 'help', text: 'Cloud models see «secret-1» instead of the secret, and can still keep it where it is. Models on this computer or your network (Ollama, LM Studio, Tailscale) see everything.' })),
         field('Private files (only models on your computer or network can read them)', privateFiles, 'One pattern a line, e.g. backups/** or *.sqlite. Keys and certificates (*.pem, *.key, id_rsa, .ssh/) and secrets/ are always private.'),
         field('Commands always allowed', rules, 'One a line: commands starting like this run without asking (in every mode but Plan only). "Always allow" on a card adds one here.'),
+        field('Machines (homelab)', h('div', {}, machines, api.agent && api.agent.tailscale ? findTailscale : null), 'The agent can work on these over SSH (your keys; it never types a password), one a line: name = user@host : look, ask or auto. look: only commands that look (docker ps, df, logs). ask: changes are asked. auto: changes run, risky ones (deleting containers or data, reboots) are still asked.'),
         field('Budget per task, in dollars', budgetUsd, 'When a task reaches it, the agent stops and asks before spending more. Needs the model\'s price below.'),
         field('Budget per task, in tokens', budgetTokens, 'The same, counted in tokens (works without prices, for any model).'),
         field('Model prices', prices, 'Dollars per million tokens, input / output, one model a line. A * at the end matches the start of a name. Models on this computer cost nothing. Each task shows its tokens and cost as it works.')
