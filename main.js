@@ -519,6 +519,8 @@ async function approveOn(providerId, payload) {
   return provider.impl.approve(cfg, payload);
 }
 
+const remoteSteering = new Map();   // reply job -> { send } (the phone steering a reply here)
+
 const remoteHandlers = {
   hello: async () => ({ app: 'balimda', name: computerName(), version: app.getVersion() }),
   models: async () => {
@@ -537,10 +539,24 @@ const remoteHandlers = {
   },
   chat: async (msg, { emit, signal }) => {
     await checkShared(msg.provider);
+    // Najwa AI Plus: the phone can send messages into this reply while it
+    // works (the "steer" request, by the reply's job).
+    const steering = { send: null };
+    if (msg.job != null) remoteSteering.set(String(msg.job), steering);
     // One reply per chat (a second one is refused with a "busy" error), and
     // the reply is kept in this computer's copy of the chat too, steps and
     // questions included.
-    return whileAnswering(() => replies.remoteChat(msg, { emit, signal }, (onDelta, work, onInfo) => runChat(msg.provider, msg.req || {}, onDelta, work || signal, onInfo || ((info) => emit({ t: 'info', info })))));
+    try {
+      return await whileAnswering(() => replies.remoteChat(msg, { emit, signal }, (onDelta, work, onInfo) => runChat(msg.provider, { ...(msg.req || {}), steering }, onDelta, work || signal, onInfo || ((info) => emit({ t: 'info', info })))));
+    } finally {
+      if (msg.job != null && remoteSteering.get(String(msg.job)) === steering) remoteSteering.delete(String(msg.job));
+    }
+  },
+  // A message from the phone for a reply running here: true when it took it.
+  steer: async (msg) => {
+    const s = remoteSteering.get(String(msg.of));
+    if (!s || !s.send || typeof msg.text !== 'string' || !msg.text.trim()) return false;
+    return !!s.send(msg.text.slice(0, 8000), msg.id ? String(msg.id) : undefined);
   },
   // The phone stays connected and is told when this computer has new data to sync.
   watch: (msg, ctx) => replies.watch(msg, ctx),

@@ -271,7 +271,7 @@ function remoteComputers({ getKey, getComputers, fetch = globalThis.fetch, probe
     // Which chat, device and message this is for: the computer refuses a
     // second reply in the same chat, and keeps its own copy of this reply
     // (see reply-hub.js). Older computers ignore all of it.
-    const { device, reply, ...plain } = req;
+    const { device, reply, steering, ...plain } = req;
     const about = {
       ...(req.chatId ? { chatId: String(req.chatId) } : {}),
       ...(device && device.id ? { deviceId: String(device.id), deviceName: String(device.name || '') } : {}),
@@ -289,6 +289,19 @@ function remoteComputers({ getKey, getComputers, fetch = globalThis.fetch, probe
       if (url && resumable) call(url, 'cancel', { job }, { timeoutMs: 5000 }).catch(() => {});
     };
     if (signal) signal.addEventListener('abort', cancel);
+    // Najwa AI Plus: a message sent mid-reply goes to the reply on the computer
+    // (the agent reads it after its current step). False when it can't take
+    // one (an older computer, or a reply not working with tools yet).
+    if (steering) {
+      steering.send = async (text, id) => {
+        if (!url) return false;
+        try {
+          return (await call(url, 'steer', { of: job, text: String(text || ''), id: id ? String(id) : null }, { timeoutMs: 10000 })) === true;
+        } catch {
+          return false;
+        }
+      };
+    }
     try {
       url = await locate(target.computer);
       let result;

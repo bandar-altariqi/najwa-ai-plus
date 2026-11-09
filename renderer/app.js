@@ -1799,19 +1799,24 @@ function putBack(chat, list) {
 //            tools), or, written as plain text, stops where it is and the
 //            message goes right away as the next one.
 //   'queue': it waits and goes when the reply has ended. Hermes Agent, and a
-//            computer's models used from the phone (the private link has no
-//            way to hand a message to a reply that is running there).
-function midReplyAction(model) {
+//            computer's models used from the phone for plain chats.
+//   'agent': Najwa AI Plus, the agent working in a computer's folder: the
+//            message goes to it there (read after its current step); if it
+//            can't take it yet, it waits like 'queue' (never interrupts).
+function midReplyAction(model, chat) {
   if (isAgent(model)) return 'queue';
-  if (model && model.provider === 'computer') return 'queue';
+  if (model && model.provider === 'computer') {
+    const p = chat && chat.project;
+    return p && p.computerId ? 'agent' : 'queue';
+  }
   return 'steer';
 }
 
 // A message sent while a reply is written (see midReplyAction).
 async function sendWhileReplying(chat, text, images, files = []) {
   const found = [...S.requests].find(([, r]) => r.chat === chat);
-  const action = found ? midReplyAction(found[1].msg.model) : 'queue';
-  if (found && action === 'steer' && text && !images.length && !files.length && api.ai.steer) {
+  const action = found ? midReplyAction(found[1].msg.model, chat) : 'queue';
+  if (found && (action === 'steer' || action === 'agent') && text && !images.length && !files.length && api.ai.steer) {
     const [requestId, r] = found;
     const step = { id: uid(), emoji: '💬', label: `You: ${text.replace(/\s+/g, ' ')}`.slice(0, 500), text: text.slice(0, 8000), steer: true, status: 'sending' };
     (r.msg.tools = r.msg.tools || []).push(step);
