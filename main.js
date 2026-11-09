@@ -359,7 +359,9 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     root,
     chatId: req.chatId,
     mode: spec.mode || a.defaultMode || 'ask',
-    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky' },
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0 },
+    model: req.model || '',
+    local: isLocalModel(providerId, cfg),
     firewall,
     approve: approvals.asker(onInfo, signal, origin),
     chatAllowed: approvals.allowedFor(req.chatId ? `agent:${req.chatId}` : null),
@@ -401,7 +403,7 @@ async function runChat(providerId, req, onDelta, signal, onInfo) {
     try {
       if (agentSpec) {
         const origin = { id: await computerId(), name: computerName(), computer: true };
-        const agent = await agentToolset(providerId, cfg, settings, { chatId: req.chatId, messages: request.messages }, agentSpec, onInfo, signal, origin);
+        const agent = await agentToolset(providerId, cfg, settings, { chatId: req.chatId, messages: request.messages, model: request.model }, agentSpec, onInfo, signal, origin);
         sets.push(agent);
         system = system ? `${system}\n\n${agent.system}` : agent.system;
       }

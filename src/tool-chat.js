@@ -65,7 +65,8 @@ const anthropicKind = {
       calls: final.content.filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, args: b.input || {} })),
       // The whole answer goes back, thinking included (Claude needs it to go on).
       assistant: [{ role: 'assistant', content: final.content }],
-      stopReason: final.stop_reason
+      stopReason: final.stop_reason,
+      usage: final.usage ? { input: (final.usage.input_tokens || 0) + (final.usage.cache_read_input_tokens || 0) + (final.usage.cache_creation_input_tokens || 0), output: final.usage.output_tokens || 0 } : null
     };
   },
 
@@ -98,6 +99,8 @@ const openaiKind = (compatible) => ({
       stream: true,
       tools: defs.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }))
     };
+    // The agent's budget guard needs each step's tokens (the last piece has them).
+    if (req.usage) body.stream_options = { include_usage: true };
     if (compatible) {
       if (req.temperature != null) body.temperature = req.temperature;
       if (req.maxTokens > 0) body.max_tokens = req.maxTokens;
@@ -111,6 +114,7 @@ const openaiKind = (compatible) => ({
     let text = '';
     let reasoning = '';
     let stopReason = 'end_turn';
+    let usage = null;
     const calls = [];
     for await (const line of readLines(res.body)) {
       if (!line.startsWith('data:')) continue;
@@ -123,6 +127,7 @@ const openaiKind = (compatible) => ({
         continue;
       }
       if (evt.error) throw new Error(evt.error.message || JSON.stringify(evt.error));
+      if (evt.usage) usage = { input: evt.usage.prompt_tokens || 0, output: evt.usage.completion_tokens || 0 };
       const choice = evt.choices && evt.choices[0];
       const delta = (choice && choice.delta) || {};
       const thought = delta.reasoning_content || delta.reasoning;
@@ -160,7 +165,7 @@ const openaiKind = (compatible) => ({
     // Thinking models on some servers (DeepSeek's, for one) want their
     // reasoning back while they use tools.
     if (compatible && reasoning) assistant.reasoning_content = reasoning;
-    return { calls: made, assistant: [assistant], stopReason };
+    return { calls: made, assistant: [assistant], stopReason, usage };
   },
 
   results(calls, results) {
@@ -207,6 +212,7 @@ const ollamaKind = {
     let text = '';
     let stopReason = 'end_turn';
     let stats;
+    let usage = null;
     const calls = [];
     for await (const line of readLines(res.body)) {
       if (!line.trim()) continue;
@@ -224,6 +230,7 @@ const ollamaKind = {
       for (const tc of m.tool_calls || []) calls.push(tc);
       if (evt.done) {
         if (evt.done_reason === 'length') stopReason = 'max_tokens';
+        usage = { input: evt.prompt_eval_count || 0, output: evt.eval_count || 0 };
         if (evt.eval_count) {
           const ns = (v) => (Number(v) || 0) / 1e6;
           stats = { engine: 'Ollama', device: 'Ollama', loadMs: ns(evt.load_duration), promptTokens: evt.prompt_eval_count || 0, promptMs: ns(evt.prompt_eval_duration), tokens: evt.eval_count, ms: ns(evt.eval_duration) };
@@ -234,7 +241,8 @@ const ollamaKind = {
       calls: calls.map((tc, i) => ({ id: `call_${i}`, name: tc.function && tc.function.name, args: (tc.function && tc.function.arguments) || {} })),
       assistant: [{ role: 'assistant', content: text, tool_calls: calls }],
       stopReason,
-      stats
+      stats,
+      usage
     };
   },
 
@@ -313,14 +321,20 @@ async function toolLoop({ k, cfg, req, w, extra, inbox, working, signal, onInfo,
   for (let step = 0; ; step++) {
     if (tools.contextBudget) compactResults(extra, tools.contextBudget);
     try {
-      turn = await k.turn(cfg, req, tools.defs, extra, w, signal);
+      turn = await k.turn(cfg, tools.budget ? { ...req, usage: true } : req, tools.defs, extra, w, signal);
     } catch (err) {
       if (err instanceof ToolsUnsupported && step === 0 && !w.text) {
         return { fallback: true, ...(inbox.length ? { pendingSteer: inbox.map((m) => m.text).join('\n') } : {}) };
       }
       throw err;
     }
+    if (tools.budget) tools.budget.add(turn.usage);
     if (!turn.calls.length) break;
+    // Budget guard: at the cap the user decides whether the task goes on.
+    if (tools.budget && !(await tools.budget.check())) {
+      w.answer(`\n\n⏸️ Stopped at the budget: ${tools.budget.summary()}. Ask again to go on.`);
+      break;
+    }
     working.yes = true;
     extra.push(...turn.assistant);
     w.gap();
@@ -375,6 +389,7 @@ function combineTools(sets) {
       return t ? t.run(name, args, signal, step) : Promise.resolve({ text: `There's no tool called ${name}.`, error: true });
     },
     close: () => live.forEach((t) => t.close && t.close()),
+    budget: (live.find((t) => t.budget) || {}).budget,
     // The largest wins: an agent set asks for more steps and room than a browser.
     maxSteps: Math.max(0, ...live.map((t) => t.maxSteps || 0)) || undefined,
     contextBudget: Math.max(0, ...live.map((t) => t.contextBudget || 0)) || undefined

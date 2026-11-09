@@ -1165,7 +1165,7 @@ function agentEvent(chat, msg, evt) {
   } else if (evt.kind === 'approval') {
     msg.approvals = msg.approvals || [];
     const origin = evt.origin && evt.origin.id ? { id: String(evt.origin.id), name: String(evt.origin.name || 'another device').slice(0, 60), computer: !!evt.origin.computer } : null;
-    const askKind = evt.askKind === 'edit' || evt.askKind === 'command' ? evt.askKind : null;
+    const askKind = ['edit', 'command', 'budget'].includes(evt.askKind) ? evt.askKind : null;
     msg.approvals.push({ runId: evt.runId, approvalId: evt.approvalId || null, generation: Number.isInteger(evt.generation) ? evt.generation : null, connectorId: evt.connectorId ? String(evt.connectorId) : null, origin, title: evt.title ? String(evt.title).slice(0, 200) : null, command: String(evt.command || '').slice(0, askKind ? 12000 : 2000), description: String(evt.description || '').slice(0, askKind ? 1500 : 500), choices: Array.isArray(evt.choices) && evt.choices.length ? evt.choices : ['once', 'deny'], askKind, state: 'pending' });
     if (S.current !== chat || document.hidden) {
       toast(`${askKind ? 'The agent' : evt.title ? 'A connector' : 'Hermes'} is asking for permission. Open the chat to answer.`, 5000);
@@ -1179,6 +1179,10 @@ function agentEvent(chat, msg, evt) {
         });
       }
     }
+  } else if (evt.kind === 'usage') {
+    // Budget guard (Najwa AI Plus): the task's tokens and cost so far.
+    const n = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+    msg.usage = { input: n(evt.input) || 0, output: n(evt.output) || 0, usd: n(evt.usd), capUsd: n(evt.capUsd), capTokens: n(evt.capTokens) };
   } else if (evt.kind === 'todo' && Array.isArray(evt.items)) {
     // The agent's to-do list (Najwa AI Plus).
     msg.todo = evt.items.slice(0, 30).map((i) => ({ text: String(i.text || '').slice(0, 200), status: ['pending', 'in_progress', 'done'].includes(i.status) ? i.status : 'pending' }));
@@ -1244,7 +1248,7 @@ async function answerApproval(chat, msg, approval, choice) {
 // What the agent did (tools) and what it asked (approvals), above its answer.
 // A command or diff on an approval card: changed lines coloured.
 function approvalText(a) {
-  if (!a.askKind) return h('pre', { class: 'approval-command', dir: 'ltr', text: a.command });
+  if (!a.askKind || a.askKind === 'budget') return h('pre', { class: 'approval-command', dir: 'ltr', text: a.command });
   const pre = h('pre', { class: 'approval-command diff', dir: 'ltr', translate: 'no' });
   for (const line of a.command.split('\n')) {
     const cls = /^\+(?!\+\+ )/.test(line) ? 'add' : /^-(?!-- )/.test(line) ? 'del' : /^@@/.test(line) ? 'hunk' : /^(\+\+\+|---) /.test(line) ? 'file' : '';
@@ -1257,6 +1261,7 @@ function approvalText(a) {
 function approvalLabel(a, c) {
   if (a.askKind === 'edit' && c === 'session') return 'Allow edits for this chat';
   if (a.askKind === 'command' && c === 'always') return 'Always allow this command';
+  if (a.askKind === 'budget') return c === 'deny' ? 'Stop' : 'Keep going';
   return APPROVAL_LABELS[c];
 }
 
@@ -1270,12 +1275,26 @@ function todoList(msg) {
       h('span', { dir: 'auto', translate: 'no', text: i.text }))));
 }
 
+// The task's tokens and cost so far (budget guard), with its cap.
+function usageLine(msg) {
+  const u = msg.usage;
+  if (!u) return null;
+  const k = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+  const usd = (n) => `$${n > 0 && n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
+  const parts = [`${k(u.input + u.output)} tokens`];
+  if (u.usd != null) parts.push(`about ${usd(u.usd)}${u.capUsd ? ` of ${usd(u.capUsd)}` : ''}`);
+  else if (u.capTokens) parts.push(`budget ${k(u.capTokens)}`);
+  return h('div', { class: 'agent-usage', title: `${u.input} in, ${u.output} out`, text: `💰 ${parts.join(' · ')}` });
+}
+
 function agentSteps(msg) {
   const tools = msg.tools || [];
   const approvals = msg.approvals || [];
-  if (!tools.length && !approvals.length && !msg.agentStatus && !(msg.todo && msg.todo.length)) return null;
+  if (!tools.length && !approvals.length && !msg.agentStatus && !(msg.todo && msg.todo.length) && !msg.usage) return null;
   const chat = [...S.cache.values()].find((c) => c.messages.includes(msg)) || S.current;
   const wrap = h('div', { class: 'agent' });
+  const usage = usageLine(msg);
+  if (usage) wrap.append(usage);
   const todo = todoList(msg);
   if (todo) wrap.append(todo);
   const stateOf = (t) => {
@@ -3433,7 +3452,7 @@ function openSettings(tab = 'general') {
   const views = {
     // Najwa AI Plus: how the agent works in project folders (this computer only).
     agent() {
-      s.agent = { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], ...(s.agent || {}) };
+      s.agent = { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], budgetUsd: 0, budgetTokens: 0, prices: '', ...(s.agent || {}) };
       const a = s.agent;
       const mode = bind(h('select', { class: 'select' }, AGENT_MODES.map(([id, label, help]) => h('option', { value: id, text: `${label}: ${help}` }))), a, 'defaultMode');
       mode.value = a.defaultMode || 'ask';
@@ -3448,6 +3467,10 @@ function openSettings(tab = 'general') {
         a.rules = rules.value.split('\n').map((l) => l.trim()).filter(Boolean);
         changed();
       });
+      const num = (v) => Math.max(0, Number(String(v).replace(/[$,\s]/g, '')) || 0);
+      const budgetUsd = bind(h('input', { class: 'input', type: 'text', inputmode: 'decimal', dir: 'ltr', placeholder: 'No limit', value: a.budgetUsd ? String(a.budgetUsd) : '' }), a, 'budgetUsd', num);
+      const budgetTokens = bind(h('input', { class: 'input', type: 'text', inputmode: 'numeric', dir: 'ltr', placeholder: 'No limit', value: a.budgetTokens ? String(a.budgetTokens) : '' }), a, 'budgetTokens', num);
+      const prices = bind(h('textarea', { class: 'input', rows: 3, dir: 'ltr', placeholder: 'deepseek-flash = 0.1 / 0.4\nclaude-* = 3 / 15', value: a.prices || '' }), a, 'prices');
       const reviewer = h('select', { class: 'select' },
         h('option', { value: '', text: 'Off' }),
         ...allModels().filter((m) => m.provider !== 'hermes' && m.provider !== 'onDevice').map((m) => h('option', { value: modelKey(m), text: `${displayModel(m.model)} (${providerLabel(m.provider)})` })));
@@ -3464,7 +3487,10 @@ function openSettings(tab = 'general') {
         h('div', { class: 'field' }, check('Privacy firewall: hide secrets (API keys, tokens, passwords, .env values) from cloud models', a, 'firewall'),
           h('div', { class: 'help', text: 'Cloud models see «secret-1» instead of the secret, and can still keep it where it is. Models on this computer or your network (Ollama, LM Studio, Tailscale) see everything.' })),
         field('Private files (only models on your computer or network can read them)', privateFiles, 'One pattern a line, e.g. backups/** or *.sqlite. Keys and certificates (*.pem, *.key, id_rsa, .ssh/) and secrets/ are always private.'),
-        field('Commands always allowed', rules, 'One a line: commands starting like this run without asking (in every mode but Plan only). "Always allow" on a card adds one here.')
+        field('Commands always allowed', rules, 'One a line: commands starting like this run without asking (in every mode but Plan only). "Always allow" on a card adds one here.'),
+        field('Budget per task, in dollars', budgetUsd, 'When a task reaches it, the agent stops and asks before spending more. Needs the model\'s price below.'),
+        field('Budget per task, in tokens', budgetTokens, 'The same, counted in tokens (works without prices, for any model).'),
+        field('Model prices', prices, 'Dollars per million tokens, input / output, one model a line. A * at the end matches the start of a name. Models on this computer cost nothing. Each task shows its tokens and cost as it works.')
       ];
     },
     general() {

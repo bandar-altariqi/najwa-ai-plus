@@ -28,6 +28,7 @@ const { dryRun, dryRunFor } = require('./dryrun');
 const { runShell, clip } = require('./shell');
 const { reviewNote } = require('./reviewer');
 const { agentPrompt } = require('./instructions');
+const { createBudget } = require('./budget');
 
 const MAX_READ_LINES = 2000;
 const MAX_READ_CHARS = 100000;
@@ -179,7 +180,7 @@ const isBinary = (buf) => buf.subarray(0, 8000).includes(0);
  * @param onInfo      events for the chat ({ kind: 'todo', items })
  * @param onAlways    (commandStart) -> save "Always allow" in Settings
  */
-function agentTools({ root, chatId, mode = 'ask', options = {}, firewall, approve, chatAllowed = new Set(), checkpoints, reviewer = null, task = '', jobs, onInfo = () => {}, onAlways = () => {} }) {
+function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', local = false, firewall, approve, chatAllowed = new Set(), checkpoints, reviewer = null, task = '', jobs, onInfo = () => {}, onAlways = () => {} }) {
   if (!root || !fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new Error('The project folder isn\'t there any more. Choose it again.');
   const perms = createPermissions({ mode, rules: options.rules || [], chatAllowed });
   const dryRunSetting = options.dryRun || 'risky';
@@ -500,6 +501,8 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, firewall, approv
       }
     },
     close() {},
+    // Budget guard (src/agent/budget.js): the task's tokens and cost, and its cap.
+    budget: createBudget({ model, local, prices: options.prices || '', capUsd: Number(options.budgetUsd) || 0, capTokens: Number(options.budgetTokens) || 0, approve, onInfo }),
     system: agentPrompt({ root, mode: perms.mode, firewall: firewall.active, dryRun: dryRunSetting !== 'off', reviewer: !!reviewer }),
     maxSteps: 150,
     contextBudget: 300000,

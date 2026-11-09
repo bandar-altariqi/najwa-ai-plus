@@ -843,3 +843,6 @@ p.mono { font-family: inherit; font-size: 13px; word-break: normal; overflow-wra
 /* The empty message box shows its Arabic placeholder right to left (the box
    itself follows what's typed in it). */
 :lang(ar) #input:placeholder-shown { direction: rtl; unicode-bidi: normal; }
+
+/* Budget guard: the task's tokens and cost. */
+.agent-usage { font-size: 12px; opacity: 0.75; margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
