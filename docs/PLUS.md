@@ -44,14 +44,32 @@ Found and fixed on the way: verdicts from thinking models were lost when their
 reasoning held a brace; the prompt now says not to pipe commands through head/tail.
 
 Plus has its own name, app ID (`com.bandaraltariqi.najwa.plus`) and data folder
-("Najwa AI Plus"), so it installs beside Najwa AI. The phone, Google Play and
-model-link workflows were removed: Plus must never upload to Najwa AI's Play listing.
+("Najwa AI Plus"), so it installs beside Najwa AI, on the desktop and on phones.
+The Google Play, iOS and model-link workflows were removed: Plus must never upload
+to Najwa AI's store listings (`test/plus-identity.test.js` checks the app IDs and
+that no workflow uploads to a store).
+
+**The Plus phone app** is separate from Najwa AI's. Its app ID and name are Plus's
+(`capacitor.config.json`, `android/app/build.gradle` applicationId, strings.xml,
+the Xcode project); the Java package stays `com.bandaraltariqi.najwa` because the
+native engine's JNI names use it. The **Android app (Plus)** workflow builds the
+APK and attaches it to the run only (no release, no Play). Google sign-in (Drive
+sync) on the phone needs an Android OAuth client for `com.bandaraltariqi.najwa.plus`
+with the SHA-1 the workflow prints (Google Cloud, same project).
+
+Agent in your pocket, on the phone (shared screens, `renderer/app.js`): choose a
+computer's project folder (📁 Project lists each computer's recent folders), the
+agent runs there and the phone shows its steps, to-do list and approval cards with
+coloured diffs; ⋯ → Undo works through the computer. A reply keeps going in the
+background (a foreground service). When the agent asks while the chat isn't on
+screen, Android shows a notification that opens the chat (`AgentAlerts.java`,
+`NetPlugin.agentAsks`). Not yet tried on a real phone.
 
 ## What's next
 
-1. **Agent in your pocket, finished:** a Plus phone app (own app ID) or the phone
-   side in the regular Najwa AI app. Coloured diffs on the phone, starting work in
-   a computer's folder, push notifications when the agent asks.
+1. **Agent in your pocket:** try it on a real phone with a computer. Still to do:
+   the iPhone (no build workflow; notifications), and true push (a notification
+   when the app was swiped away, which needs a push service).
 2. More real models: DeepSeek done (see above). Still to try: small local ones
    (Ollama qwen3/llama3.1, where most failures will be), Claude, OpenAI; and harder,
    longer tasks.
