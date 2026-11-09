@@ -32,7 +32,7 @@ const { createBudget } = require('./budget');
 const { gitTools, GIT_DEFS, GIT_READ_ONLY } = require('./git');
 const { listSkills, loadSkill } = require('./commands');
 const { createHooks, loadHooks } = require('./hooks');
-const { helperView } = require('./helpers');
+const { helperView, workerView } = require('./helpers');
 const { homelabTools, parseMachines, HOMELAB_DEFS } = require('./homelab');
 const { createMeter } = require('./meter');
 
@@ -145,6 +145,10 @@ Object.assign(DEFS, GIT_DEFS, HOMELAB_DEFS, {
     description: 'Hand a self-contained question or search job to a helper: the same model with a fresh context and the tools that look (read, search, Git history; it can\'t change anything). Only its answer comes back, so your context stays small. Good for exploring a big codebase ("find every place the login token is checked, with file:line"). Give it everything it needs in the task. Several helpers asked for in one step work at the same time.',
     parameters: { type: 'object', properties: { task: { type: 'string', description: 'The question or job, complete on its own' } }, required: ['task'] }
   },
+  delegate_work: {
+    description: 'Mixed crew: hand one well-defined piece of work (a change in a few files, with exactly what to do and how to check it) to a worker, the crew\'s model (often a smaller, cheaper or local one), with a fresh context. It can read, change files and run commands, under the same rules and questions as you. Only its report comes back. Plan first, give it everything it needs in the job, then check its work yourself (read the files, run the checks).',
+    parameters: { type: 'object', properties: { job: { type: 'string', description: 'The job, complete on its own: what to change, where, and how to check it' } }, required: ['job'] }
+  },
   use_skill: {
     description: 'Load one of the skills listed in your instructions: its full instructions, and the files that come with it. Load a skill when the task matches its description.',
     parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
@@ -173,6 +177,7 @@ function describe(call) {
     case 'todo_write': return 'Updating the to-do list';
     case 'use_skill': return `Using the skill ${quote(a.name, 40)}`;
     case 'ask_helper': return `Helper: ${quote(a.task, 70)}`;
+    case 'delegate_work': return `Worker: ${quote(a.job, 70)}`;
     case 'list_machines': return 'Listing the machines';
     case 'run_on_machine': return `On ${quote(a.machine, 30)}: ${quote(a.command, 60)}`;
     case 'git_status': return 'Checking Git status';
@@ -184,7 +189,7 @@ function describe(call) {
 }
 
 function emoji(call) {
-  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿', use_skill: '🧩', ask_helper: '🤝', list_machines: '🏠', run_on_machine: '🏠' }[call.name] || '🛠️';
+  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿', use_skill: '🧩', ask_helper: '🤝', delegate_work: '👷', list_machines: '🏠', run_on_machine: '🏠' }[call.name] || '🛠️';
 }
 
 const isBinary = (buf) => buf.subarray(0, 8000).includes(0);
@@ -393,6 +398,13 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
   const tools = {
     ...git,
     ...homelab,
+    async delegate_work(args, signal) {
+      const job = String(args.job || '').trim();
+      if (!job) return { text: 'Give the worker a job.', error: true };
+      if (perms.mode === 'plan') return { text: 'Plan mode: nothing is changed, so there\'s no work to hand on. Finish with the plan.', error: true, label: 'Worker (plan mode)' };
+      const report = await options.runHelper(workerView(set, root, options.runHelper.dest), job, signal);
+      return { text: see(report || '(The worker had no report.)').text, label: `👷 Worker: ${quote(job, 60)}` };
+    },
     async ask_helper(args, signal) {
       const task = String(args.task || '').trim();
       if (!task) return { text: 'Give the helper a task.', error: true };
@@ -610,7 +622,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
   }
 
   const set = {
-    defs: Object.entries(DEFS).filter(([name]) => (name !== 'use_skill' || skills.length) && (name !== 'ask_helper' || options.runHelper) && (!['list_machines', 'run_on_machine'].includes(name) || machines.length)).map(([name, d]) => ({ name, ...d })),
+    defs: Object.entries(DEFS).filter(([name]) => (name !== 'use_skill' || skills.length) && (!['ask_helper', 'delegate_work'].includes(name) || options.runHelper) && (!['list_machines', 'run_on_machine'].includes(name) || machines.length)).map(([name, d]) => ({ name, ...d })),
     parallel: (name) => name === 'ask_helper',
     owns: (name) => Object.prototype.hasOwnProperty.call(DEFS, name),
     describe,

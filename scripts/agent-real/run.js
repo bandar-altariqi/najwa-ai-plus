@@ -305,6 +305,31 @@ const TASKS = {
       'changed nothing': log.cards.length === 0
     })
   },
+  // Mixed crew: the agent plans and hands the change to a worker (CREW_MODEL).
+  crew: {
+    files: {
+      'package.json': '{ "name": "units", "scripts": { "test": "node test.js" } }\n',
+      'src/temp.js': 'exports.cToF = (c) => c * 9 / 5 + 32;\n',
+      'src/length.js': 'exports.kmToMiles = (km) => km * 0.621371;\n',
+      'test.js': "const assert = require('assert');\nassert.strictEqual(require('./src/temp').cToF(100), 212);\nassert.strictEqual(require('./src/length').kmToMiles(0), 0);\nconsole.log('ok');\n"
+    },
+    ask: 'Add the reverse conversions, fToC in src/temp.js and milesToKm in src/length.js, with tests. Plan it, hand the changes to a worker with delegate_work, then check its work.',
+    mode: 'auto',
+    check: (root, log) => {
+      let ok = false;
+      try {
+        const t = require(path.join(root, 'src/temp.js'));
+        const l = require(path.join(root, 'src/length.js'));
+        ok = Math.abs(t.fToC(212) - 100) < 1e-9 && Math.abs(l.milesToKm(0.621371) - 1) < 1e-6;
+      } catch {}
+      return {
+        'handed to a worker': log.calls.some((c) => c.name === 'delegate_work'),
+        'the conversions work': ok,
+        'tests pass': passes(root, 'node', ['test.js']),
+        'tests added': /fToC/.test(read(root, 'test.js') || '') && /milesToKm/.test(read(root, 'test.js') || '')
+      };
+    }
+  },
   // The budget guard: a tiny token budget, and "Stop" at its question.
   'budget-stop': {
     files: {
@@ -370,7 +395,7 @@ async function runTask(name, task) {
     root,
     chatId: `real-${name}`,
     mode: task.mode,
-    options: { rules: [], dryRun: 'risky', prices: process.env.PRICES || '', skillDirs: [], runHelper: helperRunner({ kind: KIND, cfg, model: MODEL, onInfo: (i) => onInfo(i) }), ...(task.options || {}) },
+    options: { rules: [], dryRun: 'risky', prices: process.env.PRICES || '', skillDirs: [], runHelper: helperRunner({ kind: KIND, cfg, model: process.env.CREW_MODEL || MODEL, onInfo: (i) => onInfo(i) }), ...(task.options || {}) },
     model: MODEL,
     firewall,
     approve: async (card) => {

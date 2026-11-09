@@ -3731,7 +3731,7 @@ function openSettings(tab = 'general') {
         field('New project folders start in', mode),
         h('div', { class: 'field' }, check('Local only: project chats use only models on this computer or your network', a, 'localOnly'),
           h('div', { class: 'help', text: 'Your code never goes to a cloud model: the agent, its helpers and the second opinion all stay local.' })),
-        field('Helpers use', helperModel, 'The agent can hand searches to helpers (🤝). A small model here saves money while a big one plans: a mixed crew. When the agent\'s model is local, its helpers stay local too.'),
+        field('Helpers and workers use', helperModel, 'The agent can hand searches to helpers (🤝) and well-defined changes to workers (👷), under the same rules and questions. A small model here saves money while a big one plans and checks: a mixed crew. When the agent\'s model is local, they stay local too.'),
         field('Second opinion', reviewer, 'Another model checks each change and command before you\'re asked, and the card shows what it thinks. A small model on this computer works well. In modes that don\'t ask, its concerns make the agent ask you.'),
         field('Dry run', dry, 'Commands that would change files run first in a throwaway copy of the project, and the card shows exactly what they would change. Commands that reach outside the project (git push, ssh, docker, installs) are never tried in a copy.'),
         h('div', { class: 'field' }, check('Privacy firewall: hide secrets (API keys, tokens, passwords, .env values) from cloud models', a, 'firewall'),
