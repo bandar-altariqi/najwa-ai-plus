@@ -302,6 +302,12 @@ const menuListeners = new Set();
 const withStorage = (fn) => async (...args) => fn(await ready, ...args);
 
 window.balimda = {
+  // A tapped notification: open its chat (see app.agentAsks).
+  onOpenChat(cb) {
+    if (!NetPlugin) return () => {};
+    const sub = NetPlugin.addListener('openChat', (e) => cb(e && e.chatId));
+    return () => Promise.resolve(sub).then((s) => s.remove()).catch(() => {});
+  },
   chats: {
     list: withStorage((s) => s.listChats()),
     search: withStorage((s, q) => s.searchChats(q)),
@@ -366,13 +372,37 @@ window.balimda = {
         deviceName: phoneName(),
         dataDir: 'Private app storage on this phone',
         platform: Capacitor.getPlatform(),
-        appName: 'Najwa AI',
+        appName: 'Najwa AI Plus',
         store: await buildStore,
         icon: 'icon.png',
         mobile: true,
         onDevice: true,
         providers: Object.fromEntries(Object.entries(providers).map(([k, v]) => [k, v.label]))
       };
+    },
+    // Najwa AI Plus: a notification when the agent on a computer asks while
+    // this chat isn't on screen; tapping it opens the chat (onOpenChat).
+    // Android only for now (older app: no such method).
+    async agentAsks({ title, text, chatId }) {
+      try {
+        if (NetPlugin) await NetPlugin.agentAsks({ title: String(title || ''), text: String(text || ''), chatId: String(chatId || '') });
+      } catch {
+        // the card is still in the chat
+      }
+    },
+    async agentSeen(chatId) {
+      try {
+        if (NetPlugin) await NetPlugin.agentSeen({ chatId: String(chatId || '') });
+      } catch {
+        // nothing to clear
+      }
+    },
+    async askNotifications() {
+      try {
+        if (NetPlugin) await NetPlugin.askNotifications();
+      } catch {
+        // asked another time
+      }
     },
     async openDataDir() {},
     // LICENSE / THIRD-PARTY-NOTICES.md, copied next to the app by build-web.

@@ -97,7 +97,7 @@ public class DownloadService extends Service {
             // Only a reply: no progress bar.
             return new NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_notify_chat)
-                .setContentTitle("Najwa AI")
+                .setContentTitle(context.getString(R.string.app_name))
                 .setContentText(arabic ? "جارٍ كتابة الرد…" : "Writing a reply…")
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
@@ -107,7 +107,7 @@ public class DownloadService extends Service {
         }
         return new NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Najwa AI")
+            .setContentTitle(context.getString(R.string.app_name))
             .setContentText(text)
             .setProgress(100, Math.max(percent, 0), percent < 0)
             .setOngoing(true)

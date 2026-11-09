@@ -39,3 +39,12 @@ test('no workflow uploads to an app store', () => {
     assert.doesNotMatch(text, /play-upload|androidpublisher|PLAY_SERVICE_ACCOUNT|altool|upload-app|testflight/i, `${f} must not upload to Google Play or the App Store`);
   }
 });
+
+test('the phone build finds what it changes in the page', () => {
+  // scripts/build-web.mjs edits renderer/index.html by exact text; a renamed
+  // title once broke the phone build.
+  const page = read('renderer/index.html');
+  for (const m of read('scripts/build-web.mjs').matchAll(/^replace\('([^']+)'/gm)) {
+    assert.ok(page.includes(m[1].replace(/\\n/g, '\n')), `renderer/index.html has no ${m[1]}`);
+  }
+});

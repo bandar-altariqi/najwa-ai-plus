@@ -84,7 +84,7 @@ replace('../node_modules/marked/lib/marked.umd.js', 'vendor/marked.umd.js');
 replace('../node_modules/dompurify/dist/purify.min.js', 'vendor/purify.min.js');
 replace('../src/lease.js', 'lease.js');
 replace('<script src="app.js"></script>', '<script src="bridge.js"></script>\n  <script src="app.js"></script>');
-replace('<title>Najwa AI</title>', '<title>Najwa AI</title>\n  <meta name="theme-color" content="#5b5bd6" />\n  <link rel="icon" href="icon.png" />');
+replace('<title>Najwa AI Plus</title>', '<title>Najwa AI Plus</title>\n  <meta name="theme-color" content="#5b5bd6" />\n  <link rel="icon" href="icon.png" />');
 await fs.writeFile(path.join(out, 'index.html'), html);
 
 console.log('Built mobile web app into www/');

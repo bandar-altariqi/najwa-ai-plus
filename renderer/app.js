@@ -1109,6 +1109,8 @@ function openProjectDialog() {
             return false;
           }
           setProject(chat, { ...picked, mode });
+          // The phone tells you when the agent asks (Android asks first).
+          if (S.info.mobile && api.app.askNotifications) api.app.askNotifications();
           const model = currentModel();
           if (model && !agentFor(chat || null, model)) {
             toast(S.info.mobile ? `Choose one of ${picked.computerName}'s models to work in this folder.` : 'Choose a model from Ollama, LM Studio, Claude or OpenAI to work in this folder.', 6000);
@@ -1165,7 +1167,18 @@ function agentEvent(chat, msg, evt) {
     const origin = evt.origin && evt.origin.id ? { id: String(evt.origin.id), name: String(evt.origin.name || 'another device').slice(0, 60), computer: !!evt.origin.computer } : null;
     const askKind = evt.askKind === 'edit' || evt.askKind === 'command' ? evt.askKind : null;
     msg.approvals.push({ runId: evt.runId, approvalId: evt.approvalId || null, generation: Number.isInteger(evt.generation) ? evt.generation : null, connectorId: evt.connectorId ? String(evt.connectorId) : null, origin, title: evt.title ? String(evt.title).slice(0, 200) : null, command: String(evt.command || '').slice(0, askKind ? 12000 : 2000), description: String(evt.description || '').slice(0, askKind ? 1500 : 500), choices: Array.isArray(evt.choices) && evt.choices.length ? evt.choices : ['once', 'deny'], askKind, state: 'pending' });
-    if (S.current !== chat || document.hidden) toast(`${askKind ? 'The agent' : evt.title ? 'A connector' : 'Hermes'} is asking for permission. Open the chat to answer.`, 5000);
+    if (S.current !== chat || document.hidden) {
+      toast(`${askKind ? 'The agent' : evt.title ? 'A connector' : 'Hermes'} is asking for permission. Open the chat to answer.`, 5000);
+      // Najwa AI Plus on the phone: a notification too, so the question is
+      // seen with the app in the background. Tapping it opens this chat.
+      if (askKind && S.info.mobile && api.app.agentAsks) {
+        api.app.agentAsks({
+          title: origin && origin.computer ? `The agent on ${origin.name} is asking` : 'The agent is asking',
+          text: `${evt.title ? String(evt.title).slice(0, 120) : 'It needs your permission'}${chat.title ? ` · ${String(chat.title).slice(0, 60)}` : ''}`,
+          chatId: chat.id
+        });
+      }
+    }
   } else if (evt.kind === 'todo' && Array.isArray(evt.items)) {
     // The agent's to-do list (Najwa AI Plus).
     msg.todo = evt.items.slice(0, 30).map((i) => ({ text: String(i.text || '').slice(0, 200), status: ['pending', 'in_progress', 'done'].includes(i.status) ? i.status : 'pending' }));
@@ -2118,6 +2131,7 @@ async function openChat(id) {
   }
   S.current = chat;
   S.state.lastChatId = id;
+  if (S.info.mobile && api.app.agentSeen) api.app.agentSeen(id);
   api.state.save({ lastChatId: id });
   replySpace = null;
   renderChat();

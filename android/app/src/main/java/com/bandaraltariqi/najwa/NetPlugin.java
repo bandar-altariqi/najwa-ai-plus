@@ -4,6 +4,7 @@
 
 package com.bandaraltariqi.najwa;
 
+import android.content.Intent;
 import android.util.Base64;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -106,6 +107,64 @@ public class NetPlugin extends Plugin {
     public void language(PluginCall call) {
         DownloadService.arabic = "ar".equals(call.getString("lang", "en"));
         call.resolve();
+    }
+
+    /**
+     * Najwa AI Plus: { title, text, chatId } The agent on a computer asks for
+     * permission: a notification that opens the chat (see AgentAlerts).
+     */
+    @PluginMethod
+    public void agentAsks(PluginCall call) {
+        String chatId = call.getString("chatId", "");
+        AgentAlerts.show(getContext().getApplicationContext(), call.getString("title", "Najwa AI Plus"), call.getString("text", ""), chatId);
+        call.resolve();
+    }
+
+    /** { chatId } The chat is open (or answered): its notification goes. */
+    @PluginMethod
+    public void agentSeen(PluginCall call) {
+        AgentAlerts.clear(getContext().getApplicationContext(), call.getString("chatId", ""));
+        call.resolve();
+    }
+
+    /** Android 13+ asks before an app shows notifications: asked once, when an agent chat starts. */
+    @PluginMethod
+    public void askNotifications(PluginCall call) {
+        if (android.os.Build.VERSION.SDK_INT >= 33 && getActivity() != null) {
+            String perm = "android.permission.POST_NOTIFICATIONS";
+            if (androidx.core.content.ContextCompat.checkSelfPermission(getContext(), perm) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                android.content.SharedPreferences prefs = getContext().getSharedPreferences("balimda", android.content.Context.MODE_PRIVATE);
+                if (!prefs.getBoolean("askedAgentNotifications", false)) {
+                    prefs.edit().putBoolean("askedAgentNotifications", true).apply();
+                    androidx.core.app.ActivityCompat.requestPermissions(getActivity(), new String[] {perm}, 7003);
+                }
+            }
+        }
+        call.resolve();
+    }
+
+    // A tapped notification opens its chat: when the app was closed (the
+    // launch intent) and when it was running (a new intent). Kept until the
+    // app listens.
+    @Override
+    public void load() {
+        if (getActivity() != null) openFrom(getActivity().getIntent());
+    }
+
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        super.handleOnNewIntent(intent);
+        openFrom(intent);
+    }
+
+    private void openFrom(Intent intent) {
+        if (intent == null) return;
+        String chatId = intent.getStringExtra(AgentAlerts.EXTRA_CHAT);
+        if (chatId == null || chatId.isEmpty()) return;
+        intent.removeExtra(AgentAlerts.EXTRA_CHAT);
+        JSObject evt = new JSObject();
+        evt.put("chatId", chatId);
+        notifyListeners("openChat", evt, true);
     }
 
     @PluginMethod
