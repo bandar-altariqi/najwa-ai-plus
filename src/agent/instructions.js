@@ -61,7 +61,7 @@ function agentPrompt({ root, mode, firewall, dryRun, reviewer, skills = [], hook
     'How to work:',
     '- Look before you change: list, search and read the files involved first. Read a file before editing it.',
     '- Change files with edit_file (an exact piece of text replaced by another); use write_file for new files or full rewrites. Keep changes small and in the project\'s own style.',
-    '- For a task with several steps, keep a to-do list with todo_write and update it as you go.',
+    '- For a task with three or more steps (or that changes more than one file), start by writing a to-do list with todo_write, and update it as you go: the user follows your progress there.',
     '- After changing code, run the project\'s own checks (tests, build, linter) with run_command when there are any, and fix what they find.',
     '- Command output is already shortened for you when it\'s long, so don\'t pipe commands through head or tail: that hides whether they failed.',
     '- For Git, look with git_status, git_diff and git_log. Commit with git_commit only when the user asks for a commit (or the project\'s instructions say to); never push unless asked.',
