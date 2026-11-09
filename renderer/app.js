@@ -3478,7 +3478,7 @@ function openSettings(tab = 'general') {
   const views = {
     // Najwa AI Plus: how the agent works in project folders (this computer only).
     agent() {
-      s.agent = { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], budgetUsd: 0, budgetTokens: 0, prices: '', ...(s.agent || {}) };
+      s.agent = { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], budgetUsd: 0, budgetTokens: 0, prices: '', helperModel: null, localOnly: false, ...(s.agent || {}) };
       const a = s.agent;
       const mode = bind(h('select', { class: 'select' }, AGENT_MODES.map(([id, label, help]) => h('option', { value: id, text: `${label}: ${help}` }))), a, 'defaultMode');
       mode.value = a.defaultMode || 'ask';
@@ -3497,6 +3497,14 @@ function openSettings(tab = 'general') {
       const budgetUsd = bind(h('input', { class: 'input', type: 'text', inputmode: 'decimal', dir: 'ltr', placeholder: 'No limit', value: a.budgetUsd ? String(a.budgetUsd) : '' }), a, 'budgetUsd', num);
       const budgetTokens = bind(h('input', { class: 'input', type: 'text', inputmode: 'numeric', dir: 'ltr', placeholder: 'No limit', value: a.budgetTokens ? String(a.budgetTokens) : '' }), a, 'budgetTokens', num);
       const prices = bind(h('textarea', { class: 'input', rows: 3, dir: 'ltr', placeholder: 'deepseek-flash = 0.1 / 0.4\nclaude-* = 3 / 15', value: a.prices || '' }), a, 'prices');
+      const helperModel = h('select', { class: 'select' },
+        h('option', { value: '', text: 'The same model as the agent' }),
+        ...allModels().filter((m) => m.provider !== 'hermes' && m.provider !== 'onDevice').map((m) => h('option', { value: modelKey(m), text: `${displayModel(m.model)} (${providerLabel(m.provider)})` })));
+      helperModel.value = a.helperModel ? modelKey(a.helperModel) : '';
+      helperModel.addEventListener('change', () => {
+        a.helperModel = helperModel.value ? parseModelKey(helperModel.value) : null;
+        changed();
+      });
       const reviewer = h('select', { class: 'select' },
         h('option', { value: '', text: 'Off' }),
         ...allModels().filter((m) => m.provider !== 'hermes' && m.provider !== 'onDevice').map((m) => h('option', { value: modelKey(m), text: `${displayModel(m.model)} (${providerLabel(m.provider)})` })));
@@ -3508,6 +3516,9 @@ function openSettings(tab = 'general') {
       return [
         h('p', { class: 'help', text: 'Give a chat a project folder (📁 Project, at the top) and its replies work in it as an agent: they read, search, change files and run commands there, as you allow. Every change can be undone, and you can follow and answer it from your phone.' }),
         field('New project folders start in', mode),
+        h('div', { class: 'field' }, check('Local only: project chats use only models on this computer or your network', a, 'localOnly'),
+          h('div', { class: 'help', text: 'Your code never goes to a cloud model: the agent, its helpers and the second opinion all stay local.' })),
+        field('Helpers use', helperModel, 'The agent can hand searches to helpers (🤝). A small model here saves money while a big one plans: a mixed crew. When the agent\'s model is local, its helpers stay local too.'),
         field('Second opinion', reviewer, 'Another model checks each change and command before you\'re asked, and the card shows what it thinks. A small model on this computer works well. In modes that don\'t ask, its concerns make the agent ask you.'),
         field('Dry run', dry, 'Commands that would change files run first in a throwaway copy of the project, and the card shows exactly what they would change. Commands that reach outside the project (git push, ssh, docker, installs) are never tried in a copy.'),
         h('div', { class: 'field' }, check('Privacy firewall: hide secrets (API keys, tokens, passwords, .env values) from cloud models', a, 'firewall'),

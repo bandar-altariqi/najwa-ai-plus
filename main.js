@@ -31,7 +31,7 @@ const { browsingNote } = require('./src/browser-tools');
 const { agentTools } = require('./src/agent/tools');
 const { createFirewall, isLocalModel } = require('./src/agent/firewall');
 const { createCheckpoints } = require('./src/agent/checkpoints');
-const { helperRunner } = require('./src/agent/helpers');
+const { helperRunner, chooseHelper } = require('./src/agent/helpers');
 const { expandCommand, listCommands } = require('./src/agent/commands');
 const { createReviewer } = require('./src/agent/reviewer');
 const { backgroundJobs } = require('./src/agent/shell');
@@ -331,6 +331,15 @@ async function rememberProject(root) {
   await storage.saveSettings({ ...settings, agent });
 }
 
+// Mixed crew: helpers can use another model (Settings → Agent → Helpers use),
+// say small local ones while a big model plans. A project on a local model
+// stays local: its helpers must be local too (and with Local only, always).
+function helperFor(providerId, cfg, model, a, settings, onInfo) {
+  const h = a.helperModel && a.helperModel.provider ? { ...a.helperModel, cfg: settings.providers[a.helperModel.provider] || {} } : null;
+  const use = chooseHelper({ main: { provider: providerId, cfg, model }, helper: h, localOnly: !!a.localOnly, isLocal: isLocalModel, canUseTools: (p) => !!TOOL_KINDS[p] });
+  return helperRunner({ kind: TOOL_KINDS[use.provider], cfg: use.cfg, model: use.model, onInfo });
+}
+
 // "Always" for a project's hooks: their fingerprint (src/agent/hooks.js).
 async function trustHooks(hash) {
   const settings = await storage.getSettings();
@@ -358,8 +367,9 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
   const privateGlobs = String(a.privateFiles || '').split('\n').map((l) => l.trim()).filter(Boolean);
   const firewall = createFirewall({ enabled: a.firewall !== false, cloud: !isLocalModel(providerId, cfg), privateGlobs });
   let reviewer = null;
-  if (a.reviewer && a.reviewer.provider && a.reviewer.model && PROVIDERS[a.reviewer.provider]) {
-    const rcfg = settings.providers[a.reviewer.provider] || {};
+  const rcfgOf = (r) => settings.providers[r.provider] || {};
+  if (a.reviewer && a.reviewer.provider && a.reviewer.model && PROVIDERS[a.reviewer.provider] && (!a.localOnly || isLocalModel(a.reviewer.provider, rcfgOf(a.reviewer)))) {
+    const rcfg = rcfgOf(a.reviewer);
     const rWall = createFirewall({ enabled: a.firewall !== false, cloud: !isLocalModel(a.reviewer.provider, rcfg), privateGlobs });
     reviewer = createReviewer({
       label: a.reviewer.model,
@@ -372,7 +382,7 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     root,
     chatId: req.chatId,
     mode: spec.mode || a.defaultMode || 'ask',
-    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperRunner({ kind: TOOL_KINDS[providerId], cfg, model: req.model || '', onInfo }) },
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperFor(providerId, cfg, req.model || '', a, settings, onInfo) },
     model: req.model || '',
     local: isLocalModel(providerId, cfg),
     firewall,
@@ -416,6 +426,9 @@ async function runChat(providerId, req, onDelta, signal, onInfo) {
       request.messages = [...request.messages.slice(0, -1), { ...last, content: Array.isArray(last.content) ? [{ type: 'text', text: cmd.text }, ...last.content.filter((p) => p && p.type !== 'text')] : cmd.text }];
       onInfo({ kind: 'status', text: `/${cmd.name}` });
     }
+  }
+  if (agentSpec && settings.agent && settings.agent.localOnly && !isLocalModel(providerId, cfg)) {
+    throw new Error('Local only is on (Settings → Agent): choose a model on this computer or your network for this project, or turn it off.');
   }
   if (agentSpec && !TOOL_KINDS[providerId]) throw new Error(`${provider.label} can't work in a project folder. Choose a model from Ollama, LM Studio, Claude or OpenAI.`);
   if (TOOL_KINDS[providerId] && (req.browse || req.connectors || agentSpec)) {

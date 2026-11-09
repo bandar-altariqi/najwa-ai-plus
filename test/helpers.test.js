@@ -92,3 +92,19 @@ test('helper agents: run side by side, only look, answer the agent, share the bu
     srv.close();
   }
 });
+
+test('mixed crew: which model the helpers use', () => {
+  const { chooseHelper } = require('../src/agent/helpers');
+  const { isLocalModel } = require('../src/agent/firewall');
+  const canUseTools = () => true;
+  const cloud = { provider: 'anthropic', cfg: {}, model: 'big' };
+  const local = { provider: 'ollama', cfg: { baseUrl: 'http://127.0.0.1:11434' }, model: 'small' };
+  const otherCloud = { provider: 'openai', cfg: {}, model: 'other' };
+  const pick = (main, helper, localOnly) => chooseHelper({ main, helper, localOnly, isLocal: isLocalModel, canUseTools }).model;
+  assert.strictEqual(pick(cloud, local), 'small');        // big plans, small works
+  assert.strictEqual(pick(cloud, otherCloud), 'other');   // cloud with cloud: fine
+  assert.strictEqual(pick(local, otherCloud), 'small');   // a local project never goes to the cloud through a helper
+  assert.strictEqual(pick(cloud, otherCloud, true), 'big');   // (Local only refuses the cloud main model before this)
+  assert.strictEqual(pick(cloud, null), 'big');
+  assert.strictEqual(chooseHelper({ main: cloud, helper: local, isLocal: isLocalModel, canUseTools: (p) => p !== 'ollama' }).model, 'big');
+});

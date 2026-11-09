@@ -71,4 +71,21 @@ function helperRunner({ kind, cfg, model, maxTokens = 8000, onInfo = () => {} })
   };
 }
 
-module.exports = { helperView, helperRunner, HELPER_STEPS };
+/**
+ * Mixed crew: which model the helpers use. The chosen helper model (Settings
+ * → Agent → Helpers use) when allowed, else the agent's own. A project on a
+ * local model stays local: its helpers must be local too, and with Local only
+ * they always are.
+ * @param main    { provider, cfg, model }  the agent's model
+ * @param helper  { provider, cfg, model } | null
+ * @param isLocal (provider, cfg) -> true for a model on this computer or network
+ * @param canUseTools (provider) -> true when the provider can use tools
+ */
+function chooseHelper({ main, helper, localOnly = false, isLocal, canUseTools }) {
+  if (helper && helper.provider && helper.model && canUseTools(helper.provider)) {
+    if (isLocal(helper.provider, helper.cfg) || (!isLocal(main.provider, main.cfg) && !localOnly)) return helper;
+  }
+  return main;
+}
+
+module.exports = { helperView, helperRunner, chooseHelper, HELPER_STEPS };

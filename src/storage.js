@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS = {
   // private files (one glob a line), commands always allowed, the second
   // opinion's model ({ provider, model } or null), the mode new projects start
   // in, and the project folders used lately.
-  agent: { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], budgetUsd: 0, budgetTokens: 0, prices: '', trustedHooks: [] },
+  agent: { dryRun: 'risky', firewall: true, privateFiles: '', rules: [], reviewer: null, defaultMode: 'ask', recent: [], budgetUsd: 0, budgetTokens: 0, prices: '', trustedHooks: [], helperModel: null, localOnly: false },
   temperature: 0.7,
   maxTokens: 0,
   historyLimit: 0,
