@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "description": "Najwa AI Plus: Najwa AI with a full agent harness. A private AI chat app for desktop and mobile that remembers every chat. Runs models on your device (with GPU acceleration on Snapdragon phones), on your own computer (Ollama, LM Studio) or in the cloud (Claude, OpenAI).",
   "main": "main.js",
+  "bin": {
+    "najwa-agent": "bin/najwa-agent.js"
+  },
   "author": {
     "name": "Bandar Altariqi",
     "url": "https://github.com/bandar9994"
