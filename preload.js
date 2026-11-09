@@ -230,7 +230,9 @@ contextBridge.exposeInMainWorld('balimda', {
     run: invoke('agent:run'),
     exportRun: invoke('agent:exportRun'),
     checkpoints: invoke('agent:checkpoints'),
-    undo: invoke('agent:undo')
+    undo: invoke('agent:undo'),
+    exportUndo: invoke('agent:exportUndo'),
+    importUndo: invoke('agent:importUndo')
   },
   sync: {
     status: invoke('sync:status'),

@@ -885,6 +885,9 @@ function registerIpc() {
   ipcMain.handle('agent:commands', (_e, root) => listCommands(path.resolve(String(root || '')), [agentDir]).map(({ name, description }) => ({ name, description })));
   ipcMain.handle('agent:checkpoints', (_e, chatId) => checkpoints.list(String(chatId)));
   ipcMain.handle('agent:undo', (_e, chatId, id) => checkpoints.undo(String(chatId), id || null));
+  // Undo history that travels with the chat (synced, encrypted on the device).
+  ipcMain.handle('agent:exportUndo', (_e, chatId) => checkpoints.exportFor(String(chatId)));
+  ipcMain.handle('agent:importUndo', (_e, chatId, packed, root) => checkpoints.importFrom(String(chatId), String(packed || ''), root ? path.resolve(String(root)) : ''));
 
   // Stop a reply a phone asked this computer for (Stop pressed here, in the chat
   // where the reply shows as "Replying on <phone>"). 0 when this computer isn't writing it.

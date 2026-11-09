@@ -1123,10 +1123,39 @@ function openProjectDialog() {
 }
 
 // Undo the agent's newest change in a chat (on the computer with the folder).
+// The agent's newest changes travel with the chat (its sync is encrypted on
+// the device), so another computer can undo them too.
+async function keepUndoWithChat(chat) {
+  const p = projectOf(chat);
+  if (!chat || !p || p.computerId || !api.agent || !api.agent.exportUndo) return;
+  try {
+    const packed = await api.agent.exportUndo(chat.id);
+    if ((packed || '') === (chat.agentUndo || '')) return;
+    if (packed) chat.agentUndo = packed;
+    else delete chat.agentUndo;
+    saveChatSoon(chat, 1500);
+  } catch {
+    // kept on this computer anyway
+  }
+}
+
 async function undoAgentChange(chat) {
   const p = projectOf(chat);
   const via = p && p.computerId ? { list: () => api.ai.agentOn(p.computerId, 'agentCheckpoints', { chatId: chat.id }), undo: () => api.ai.agentOn(p.computerId, 'agentUndo', { chatId: chat.id }) }
-    : api.agent ? { list: () => api.agent.checkpoints(chat.id), undo: () => api.agent.undo(chat.id) } : null;
+    : api.agent ? {
+      // No undo history here (another computer, or after a reinstall): the
+      // one that came with the chat, in this computer's project folder.
+      list: async () => {
+        const mine = await api.agent.checkpoints(chat.id);
+        if (mine.length || !chat.agentUndo || !p || !api.agent.importUndo) return mine;
+        return (await api.agent.importUndo(chat.id, chat.agentUndo, p.root)) ? api.agent.checkpoints(chat.id) : mine;
+      },
+      undo: async () => {
+        const res = await api.agent.undo(chat.id);
+        keepUndoWithChat(chat);
+        return res;
+      }
+    } : null;
   if (!via) {
     toast('This chat has no project folder.');
     return;
@@ -2969,6 +2998,7 @@ async function runCompletion(chat, entry, resume = null) {
   delete msg.waiting;
   if (!res.ok) msg.error = `Error: ${res.error}`;
   if (res.stats) msg.stats = res.stats;
+  if (msg.tools && msg.tools.length) keepUndoWithChat(chat);
   if (res.ok && res.stopReason === 'max_tokens') msg.notice = 'The reply was cut off at the length limit. Ask it to continue, or raise "Max tokens" in Settings.';
   // The model read only part of a file attached to the message it answers: say so.
   if (res.ok && !res.aborted && !msg.notice) {

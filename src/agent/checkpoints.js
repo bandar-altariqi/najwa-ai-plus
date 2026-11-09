@@ -6,11 +6,27 @@
 // per chat, so "Undo" can put it back, one change at a time (newest first).
 // Changes the agent applies from a dry run are kept the same way. Kept on this
 // computer, in the app's data folder; the newest 40 changes per chat.
+//
+// Najwa AI Plus: the newest changes also travel with the chat (exportFor:
+// compressed, a size cap), so the chat's sync (encrypted on the device)
+// takes them to the user's other devices. A computer without its own copy
+// (another one, or this one after a reinstall) can then undo in the chat's
+// project folder there (importFrom).
 
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
+
+const SYNC_BYTES = 256 * 1024;
+const SYNC_ENTRIES = 10;
+// A path from elsewhere must stay inside the project.
+const inside = (root, rel) => {
+  const abs = path.resolve(root, rel);
+  const r = path.relative(path.resolve(root), abs);
+  return r && !r.startsWith('..') && !path.isAbsolute(r) ? abs : null;
+};
 
 const KEEP = 40;
 const MAX_FILE = 8 * 1024 * 1024;   // bigger files can't be undone (the card says so)
@@ -92,8 +108,8 @@ function createCheckpoints(dir) {
       const skipped = [];
       for (const e of list.splice(at).reverse()) {
         for (const f of e.files.slice().reverse()) {
-          const abs = path.join(e.root, f.rel);
-          if (f.tooBig) {
+          const abs = inside(e.root, f.rel);
+          if (f.tooBig || !abs) {
             skipped.push(f.rel);
             continue;
           }
@@ -110,6 +126,49 @@ function createCheckpoints(dir) {
       }
       save(chatId, list);
       return { undone, files: [...new Set(files)], skipped };
+    },
+
+    /**
+     * The newest changes, packed to travel with the chat: a string (gzip,
+     * base64), or '' when there's nothing. Big ones are left out.
+     */
+    exportFor(chatId) {
+      const list = load(chatId).filter((e) => !e.files.some((f) => f.tooBig));
+      const out = [];
+      let size = 0;
+      for (const e of list.slice().reverse().slice(0, SYNC_ENTRIES)) {
+        const one = JSON.stringify({ id: e.id, at: e.at, label: e.label, files: e.files });
+        if (size + one.length > SYNC_BYTES * 4) break;
+        size += one.length;
+        out.unshift(JSON.parse(one));
+      }
+      if (!out.length) return '';
+      let packed = zlib.gzipSync(JSON.stringify({ v: 1, entries: out })).toString('base64');
+      while (packed.length > SYNC_BYTES && out.length > 1) {
+        out.shift();
+        packed = zlib.gzipSync(JSON.stringify({ v: 1, entries: out })).toString('base64');
+      }
+      return packed.length > SYNC_BYTES ? '' : packed;
+    },
+
+    /**
+     * Changes that came with the chat, for this computer when it has none of
+     * its own: kept with this computer's project folder. Returns how many.
+     */
+    importFrom(chatId, packed, root) {
+      if (!packed || !root || load(chatId).length) return 0;
+      let data;
+      try {
+        data = JSON.parse(zlib.gunzipSync(Buffer.from(String(packed), 'base64')).toString('utf8'));
+      } catch {
+        return 0;
+      }
+      const entries = (data && Array.isArray(data.entries) ? data.entries : [])
+        .filter((e) => e && typeof e.id === 'string' && Array.isArray(e.files) && e.files.every((f) => f && typeof f.rel === 'string' && inside(root, f.rel)))
+        .map((e) => ({ id: e.id, at: Number(e.at) || 0, label: String(e.label || 'Change').slice(0, 200), root, files: e.files.map((f) => ({ rel: f.rel, existed: !!f.existed, ...(f.existed ? { data: String(f.data || ''), ...(Number.isInteger(f.mode) ? { mode: f.mode } : {}) } : {}) })) }));
+      if (!entries.length) return 0;
+      save(chatId, entries);
+      return entries.length;
     }
   };
 }
