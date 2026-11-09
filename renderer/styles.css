@@ -859,3 +859,8 @@ p.mono { font-family: inherit; font-size: 13px; word-break: normal; overflow-wra
 .replay-ev.ask { border-inline-start: 3px solid #d08a2c; }
 .replay-ev.text { white-space: pre-wrap; }
 .replay-t { float: inline-end; opacity: .6; font-size: 12px; margin-inline-start: 8px; }
+
+/* Privacy meter: what went where. */
+.agent-privacy { font-size: 12px; opacity: 0.8; margin: 0 0 6px; }
+.agent-privacy summary { cursor: pointer; }
+.agent-privacy > div { margin: 3px 0 0 18px; overflow-wrap: anywhere; }

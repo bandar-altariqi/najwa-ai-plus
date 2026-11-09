@@ -669,7 +669,10 @@
     'Budget per task, in tokens': 'الميزانية لكل مهمة، بالتوكنات',
     'The same, counted in tokens (works without prices, for any model).': 'نفس الشيء، لكن بعدد التوكنات (تعمل بدون أسعار ومع أي نموذج).',
     'Model prices': 'أسعار النماذج',
-    'No limit': 'بدون حد'
+    'No limit': 'بدون حد',
+    'Nothing left your computer or network': 'لم يخرج شيء من جهازك أو شبكتك',
+    'Counts what the agent read from your project and sent on; your own messages aren\'t counted.': 'يحسب ما قرأه الوكيل من مشروعك وأرسله، ولا يحسب رسائلك أنت.',
+    '🔑 No secrets were found in what was sent.': '🔑 لم يُعثر على أسرار فيما أُرسل.'
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = AR;

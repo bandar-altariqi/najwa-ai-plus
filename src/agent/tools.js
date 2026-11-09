@@ -34,6 +34,7 @@ const { listSkills, loadSkill } = require('./commands');
 const { createHooks, loadHooks } = require('./hooks');
 const { helperView } = require('./helpers');
 const { homelabTools, parseMachines, HOMELAB_DEFS } = require('./homelab');
+const { createMeter } = require('./meter');
 
 const MAX_READ_LINES = 2000;
 const MAX_READ_CHARS = 100000;
@@ -216,14 +217,23 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     return r;
   };
   const shieldNote = (n) => (n ? ` · 🛡️ ${n} secret${n === 1 ? '' : 's'} hidden` : '');
+  // Privacy meter (meter.js): what went to which model.
+  const meter = createMeter({ onInfo, secrets: () => (firewall.secretsHidden ? firewall.secretsHidden() : 0) });
+  const agentDest = { label: model || 'the agent\'s model', cloud: !local };
   const inProject = (p) => {
     const r = resolveIn(root, p);
-    firewall.checkPrivate(r.rel);
+    try {
+      firewall.checkPrivate(r.rel);
+    } catch (err) {
+      meter.keptBack(r.rel);
+      throw err;
+    }
     return r;
   };
 
   async function secondOpinion(action, detail, signal) {
     if (!reviewer) return { note: '', force: false };
+    meter.sent({ label: reviewer.label, cloud: reviewer.cloud !== false }, `${task}\n${action}\n${detail || ''}`);
     const review = await reviewer.review({ task, action, detail }, signal);
     return { note: reviewNote(review, reviewer.label), force: !!review && review.verdict !== 'ok', review };
   }
@@ -386,7 +396,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     async ask_helper(args, signal) {
       const task = String(args.task || '').trim();
       if (!task) return { text: 'Give the helper a task.', error: true };
-      const answer = await options.runHelper(helperView(set, root), task, signal);
+      const answer = await options.runHelper(helperView(set, root, options.runHelper.dest), task, signal);
       return { text: see(answer || '(The helper had no answer.)').text, label: `🤝 Helper: ${quote(task, 60)}` };
     },
     use_skill(args) {
@@ -579,6 +589,26 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     }
   };
 
+  // One tool call, with the project's hooks around it.
+  async function runTool(name, args, signal) {
+    const tool = tools[name];
+    if (!tool) return { text: `There's no tool called ${name}.`, error: true };
+    const a = args || {};
+    try {
+      const stop = await hooks.before(name, a, signal);
+      if (stop) return { text: stop, error: true, label: `${describe({ name, args: a })} (stopped by a hook)` };
+      const r = await tool(a, signal);
+      if (r && !r.error) {
+        const note = await hooks.after(name, a, signal);
+        if (note) return { ...r, text: `${r.text}\n\n${note}`, label: `${r.label || describe({ name, args: a })} · 🪝` };
+      }
+      return r;
+    } catch (err) {
+      if (signal && signal.aborted) throw err;
+      return { text: `That didn't work: ${err.message || err}`, error: true };
+    }
+  }
+
   const set = {
     defs: Object.entries(DEFS).filter(([name]) => (name !== 'use_skill' || skills.length) && (name !== 'ask_helper' || options.runHelper) && (!['list_machines', 'run_on_machine'].includes(name) || machines.length)).map(([name, d]) => ({ name, ...d })),
     parallel: (name) => name === 'ask_helper',
@@ -586,24 +616,13 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     describe,
     emoji,
     readOnly: (name) => READ_ONLY.has(name),
-    async run(name, args, signal) {
-      const tool = tools[name];
-      if (!tool) return { text: `There's no tool called ${name}.`, error: true };
-      const a = args || {};
-      try {
-        const stop = await hooks.before(name, a, signal);
-        if (stop) return { text: stop, error: true, label: `${describe({ name, args: a })} (stopped by a hook)` };
-        const r = await tool(a, signal);
-        if (r && !r.error) {
-          const note = await hooks.after(name, a, signal);
-          if (note) return { ...r, text: `${r.text}\n\n${note}`, label: `${r.label || describe({ name, args: a })} · 🪝` };
-        }
-        return r;
-      } catch (err) {
-        if (signal && signal.aborted) throw err;
-        return { text: `That didn't work: ${err.message || err}`, error: true };
-      }
+    // dest: who reads the result (the agent's model, or a helper's: see helpers.js).
+    async run(name, args, signal, _step, dest = agentDest) {
+      const r = await runTool(name, args, signal);
+      if (r && typeof r.text === 'string') meter.sent(dest, r.text);
+      return r;
     },
+    meter,
     close() {},
     // Budget guard (src/agent/budget.js): the task's tokens and cost, and its cap.
     budget: createBudget({ model, local, prices: options.prices || '', capUsd: Number(options.budgetUsd) || 0, capTokens: Number(options.budgetTokens) || 0, approve, onInfo }),

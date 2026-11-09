@@ -1320,6 +1320,13 @@ function agentEvent(chat, msg, evt) {
         });
       }
     }
+  } else if (evt.kind === 'privacy' && Array.isArray(evt.to)) {
+    // Privacy meter (Najwa AI Plus): what went to which model.
+    msg.privacy = {
+      to: evt.to.slice(0, 10).map((d) => ({ label: String(d.label || '').slice(0, 80), cloud: !!d.cloud, bytes: Number(d.bytes) || 0, items: Number(d.items) || 0 })),
+      secrets: Number(evt.secrets) || 0,
+      kept: (Array.isArray(evt.kept) ? evt.kept : []).slice(0, 50).map((k) => String(k).slice(0, 200))
+    };
   } else if (evt.kind === 'usage') {
     // Budget guard (Najwa AI Plus): the task's tokens and cost so far.
     const n = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -1437,6 +1444,26 @@ function todoList(msg) {
       h('span', { dir: 'auto', translate: 'no', text: i.text }))));
 }
 
+// Privacy meter: what the agent read from the project went to which model,
+// how many secrets were hidden, which private files stayed here. Tap for more.
+function privacyLine(msg) {
+  const p = msg.privacy;
+  if (!p || !p.to.length) return null;
+  const kb = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  const cloud = p.to.filter((d) => d.cloud);
+  const summary = [
+    cloud.length ? `${kb(cloud.reduce((n, d) => n + d.bytes, 0))} to the cloud` : 'Nothing left your computer or network',
+    p.secrets ? `${p.secrets} secret${p.secrets === 1 ? '' : 's'} hidden` : null,
+    p.kept.length ? `${p.kept.length} private file${p.kept.length === 1 ? '' : 's'} kept here` : null
+  ].filter(Boolean).join(' · ');
+  return h('details', { class: 'agent-privacy' },
+    h('summary', { text: `🛡️ ${summary}` }),
+    ...p.to.map((d) => h('div', { text: `${d.cloud ? '☁️' : '🏠'} ${displayModel(d.label)}: ${kb(d.bytes)} of project text (${d.items} piece${d.items === 1 ? '' : 's'}), ${d.cloud ? 'in the cloud' : 'on your computer or network'}` })),
+    h('div', { text: p.secrets ? `🔑 ${p.secrets} different secret${p.secrets === 1 ? ' was' : 's were'} replaced by «secret-N» before going to the cloud.` : '🔑 No secrets were found in what was sent.' }),
+    p.kept.length ? h('div', { text: `🔒 Kept on this computer (private): ${p.kept.join(', ')}` }) : null,
+    h('div', { class: 'help', text: 'Counts what the agent read from your project and sent on; your own messages aren\'t counted.' }));
+}
+
 // The task's tokens and cost so far (budget guard), with its cap.
 function usageLine(msg) {
   const u = msg.usage;
@@ -1452,11 +1479,13 @@ function usageLine(msg) {
 function agentSteps(msg) {
   const tools = msg.tools || [];
   const approvals = msg.approvals || [];
-  if (!tools.length && !approvals.length && !msg.agentStatus && !(msg.todo && msg.todo.length) && !msg.usage) return null;
+  if (!tools.length && !approvals.length && !msg.agentStatus && !(msg.todo && msg.todo.length) && !msg.usage && !msg.privacy) return null;
   const chat = [...S.cache.values()].find((c) => c.messages.includes(msg)) || S.current;
   const wrap = h('div', { class: 'agent' });
   const usage = usageLine(msg);
   if (usage) wrap.append(usage);
+  const privacy = privacyLine(msg);
+  if (privacy) wrap.append(privacy);
   const todo = todoList(msg);
   if (todo) wrap.append(todo);
   const stateOf = (t) => {

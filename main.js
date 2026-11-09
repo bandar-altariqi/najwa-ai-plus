@@ -340,7 +340,7 @@ async function rememberProject(root) {
 function helperFor(providerId, cfg, model, a, settings, onInfo) {
   const h = a.helperModel && a.helperModel.provider ? { ...a.helperModel, cfg: settings.providers[a.helperModel.provider] || {} } : null;
   const use = chooseHelper({ main: { provider: providerId, cfg, model }, helper: h, localOnly: !!a.localOnly, isLocal: isLocalModel, canUseTools: (p) => !!TOOL_KINDS[p] });
-  return helperRunner({ kind: TOOL_KINDS[use.provider], cfg: use.cfg, model: use.model, onInfo });
+  return helperRunner({ kind: TOOL_KINDS[use.provider], cfg: use.cfg, model: use.model, local: isLocalModel(use.provider, use.cfg), onInfo });
 }
 
 // "Always" for a project's hooks: their fingerprint (src/agent/hooks.js).
@@ -376,6 +376,7 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     const rWall = createFirewall({ enabled: a.firewall !== false, cloud: !isLocalModel(a.reviewer.provider, rcfg), privateGlobs });
     reviewer = createReviewer({
       label: a.reviewer.model,
+      cloud: !isLocalModel(a.reviewer.provider, rcfg),
       scrub: (t) => rWall.scrub(t).text,
       chat: (r, sig) => plainReply(a.reviewer.provider, rcfg, { model: a.reviewer.model, ...r }, sig)
     });

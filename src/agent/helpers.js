@@ -29,13 +29,14 @@ const HELPER_PROMPT = (root) => [
  * @param set   the agent's toolset (tools.js)
  * @param root  the project folder
  */
-function helperView(set, root) {
+function helperView(set, root, dest = null) {
   const ok = (name) => set.readOnly(name) && name !== 'todo_write' && name !== 'ask_helper';
   return {
     defs: set.defs.filter((d) => ok(d.name)),
     describe: set.describe,
     emoji: set.emoji,
-    run: (name, args, signal) => (ok(name) ? set.run(name, args, signal) : Promise.resolve({ text: `A helper can only look: ${name} isn't available.`, error: true })),
+    // What it reads goes to the helper's model (the privacy meter counts it there).
+    run: (name, args, signal, step) => (ok(name) ? set.run(name, args, signal, step, dest || undefined) : Promise.resolve({ text: `A helper can only look: ${name} isn't available.`, error: true })),
     system: HELPER_PROMPT(root),
     budget: set.budget,
     maxSteps: HELPER_STEPS,
@@ -51,9 +52,9 @@ function helperView(set, root) {
  * @param onInfo  the chat's events (helper steps are passed on, marked 🤝)
  * Returns (view, task, signal) -> the helper's answer.
  */
-function helperRunner({ kind, cfg, model, maxTokens = 8000, onInfo = () => {} }) {
+function helperRunner({ kind, cfg, model, local = false, maxTokens = 8000, onInfo = () => {} }) {
   let n = 0;
-  return async (view, task, signal) => {
+  const run = async (view, task, signal) => {
     const tag = `helper${++n}`;
     const res = await chatWithTools({
       kind,
@@ -69,6 +70,9 @@ function helperRunner({ kind, cfg, model, maxTokens = 8000, onInfo = () => {} })
     if (res.fallback) throw new Error('This model can\'t use tools, so it can\'t have helpers.');
     return String(res.text || '').replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
   };
+  // Who the helpers are, for the privacy meter.
+  run.dest = { label: `${model} (helpers)`, cloud: !local };
+  return run;
 }
 
 /**

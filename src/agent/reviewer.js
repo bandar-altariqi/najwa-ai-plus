@@ -43,9 +43,10 @@ function parseVerdict(text) {
  * @param label the reviewing model's name, shown on the card
  * @param scrub text -> text            the privacy firewall for that model
  */
-function createReviewer({ chat, label, scrub = (t) => t, timeoutMs = 45000 }) {
+function createReviewer({ chat, label, cloud = true, scrub = (t) => t, timeoutMs = 45000 }) {
   return {
     label,
+    cloud,
     async review({ task, action, detail }, signal) {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), timeoutMs);
