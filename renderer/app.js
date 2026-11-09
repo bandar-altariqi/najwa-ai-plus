@@ -136,7 +136,7 @@ const COPYRIGHT = `© 2026 ${AUTHOR}. All rights reserved.`;
 const COMMERCIAL_URL = `${PROJECT_URL}/issues/new?template=commercial-license.yml`;
 
 function appName() {
-  return (S.info && S.info.appName) || 'Najwa AI';
+  return (S.info && S.info.appName) || 'Najwa AI Plus';
 }
 
 function providerLabel(id) {

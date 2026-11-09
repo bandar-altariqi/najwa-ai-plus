@@ -1,8 +1,8 @@
 {
-  "name": "balimda",
-  "productName": "Balimda",
+  "name": "najwa-ai-plus",
+  "productName": "Najwa AI Plus",
   "version": "1.0.0",
-  "description": "Najwa AI: a private AI chat app for desktop and mobile that remembers every chat. Runs models on your device (with GPU acceleration on Snapdragon phones), on your own computer (Ollama, LM Studio) or in the cloud (Claude, OpenAI).",
+  "description": "Najwa AI Plus: Najwa AI with a full agent harness. A private AI chat app for desktop and mobile that remembers every chat. Runs models on your device (with GPU acceleration on Snapdragon phones), on your own computer (Ollama, LM Studio) or in the cloud (Claude, OpenAI).",
   "main": "main.js",
   "author": {
     "name": "Bandar Altariqi",
@@ -47,8 +47,8 @@
     "esbuild": "^0.28.2"
   },
   "build": {
-    "appId": "com.bandaraltariqi.najwa",
-    "productName": "Najwa AI",
+    "appId": "com.bandaraltariqi.najwa.plus",
+    "productName": "Najwa AI Plus",
     "files": [
       "main.js",
       "preload.js",
@@ -93,7 +93,7 @@
       ],
       "category": "public.app-category.productivity",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Najwa AI listens when you click the microphone, so you can talk to your AI instead of typing. What you say is turned into text on this Mac."
+        "NSMicrophoneUsageDescription": "Najwa AI Plus listens when you click the microphone, so you can talk to your AI instead of typing. What you say is turned into text on this Mac."
       },
       "identity": "-",
       "hardenedRuntime": false
@@ -105,7 +105,7 @@
       ],
       "category": "Utility",
       "maintainer": "Bandar Altariqi <bandar9994@users.noreply.github.com>",
-      "synopsis": "Najwa AI by Bandar Altariqi: private AI chat that remembers every chat"
+      "synopsis": "Najwa AI Plus by Bandar Altariqi: private AI chat with a full agent harness"
     },
     "copyright": "Copyright © 2026 Bandar Altariqi"
   },

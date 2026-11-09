@@ -30,13 +30,11 @@ const { desktopBrowser } = require('./src/browser-desktop');
 const { browsingNote } = require('./src/browser-tools');
 const os = require('os');
 
-// The app was called Balimda before Najwa AI. Its internal name stays
-// "Balimda" (package.json's top-level productName too): it picks the data
-// folder and the system keychain entry that encrypts the saved API keys, so
-// chats and keys from before the rename are still there. People only ever
-// see "Najwa AI" (APP_NAME, and build.productName for the installers).
-const APP_NAME = 'Najwa AI';
-const INTERNAL_NAME = 'Balimda';
+// Najwa AI Plus: Najwa AI with a full agent harness (src/agent/). It has its
+// own name, data folder and keychain entry, so it installs beside Najwa AI
+// without touching its chats or keys.
+const APP_NAME = 'Najwa AI Plus';
+const INTERNAL_NAME = 'Najwa AI Plus';
 app.setName(INTERNAL_NAME);
 app.setPath('userData', path.join(app.getPath('appData'), INTERNAL_NAME));
 app.setAboutPanelOptions({ applicationName: APP_NAME });
