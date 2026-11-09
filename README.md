@@ -2,6 +2,39 @@
 
 <img src="build/icon.png" width="104" alt="Najwa AI icon">
 
+# Najwa AI Plus
+
+<sub>Najwa AI with a full agent harness · by Bandar Altariqi</sub>
+
+### Najwa AI, plus an agent that works in your projects, safely.
+
+</div>
+
+## What Plus adds
+
+Give a chat a **project folder** (📁 Project, at the top) and its replies work there as an agent: they look around, read, search, change files and run commands, step by step, as you allow. Everything else in Najwa AI stays as it is.
+
+**The harness**
+- **Tools:** list, read, find and search files; edit files (exact text replaced) or write them; run commands, with time limits, or in the background for dev servers; a to-do list you watch fill in.
+- **Modes, per chat:** *Ask first* (every change and command), *Auto-edit* (files on its own, asks before commands), *Plan only* (reads and plans, changes nothing) and *Auto* (all on its own, except commands that could do harm, which always ask).
+- **Rules:** "Always allow" a command (remembered by what it does, like `npm test` or `python3 -m pytest`), or allow edits for a chat.
+- **Undo:** every change the agent makes is kept, so ⋯ → *Undo the agent's last change* puts files back, one change at a time.
+- **Project instructions:** read from `NAJWA.md`, `AGENTS.md` or `CLAUDE.md`, so projects set up for other agents work as they are.
+- **Long tasks:** up to 150 steps, with older tool results shortened as the work grows.
+- **Any model that can use tools:** Ollama and LM Studio on your computer, or Claude and OpenAI with your own key.
+
+**What other harnesses don't do**
+- 📱 **Agent in your pocket:** the agent runs on your computer; its steps, diffs and questions reach your phone, and you can approve, deny or start work there.
+- 🛡️ **Privacy firewall:** secrets (API keys, tokens, passwords, `.env` values) are hidden from cloud models as `«secret-1»`, and the model can still keep them where they are: the real value goes back in on your computer. Private files (`*.pem`, `.ssh/`, `secrets/`, and your own patterns) can only be read by models on your own computer or network.
+- 🧑‍⚖️ **Second opinion:** another model (a small local one works well) checks each change and command against what you asked for, and its verdict is on the approval card. In modes that don't ask, its concerns make the agent ask you.
+- 🧪 **Dry run:** a command that would change files runs first in a throwaway copy of the project; the card shows exactly which files it would change, with the diff and its output. Allowing applies those changes (without running it again), and they can be undone. Commands that reach outside the project (`git push`, `ssh`, `docker`, installs) are never tried in a copy.
+
+The agent can only use files inside the project folder. Settings → Agent has the dry-run setting, the firewall, private files, commands always allowed and the second opinion's model.
+
+<div align="center">
+
+---
+
 # Najwa AI
 
 <sub>نجوى · a private conversation · formerly Balimda</sub>
