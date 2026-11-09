@@ -22,6 +22,7 @@ const { createFirewall } = require('../../src/agent/firewall');
 const { createCheckpoints } = require('../../src/agent/checkpoints');
 const { createReviewer } = require('../../src/agent/reviewer');
 const { backgroundJobs } = require('../../src/agent/shell');
+const { expandCommand } = require('../../src/agent/commands');
 const { PROVIDERS } = require('../../src/providers');
 
 const KIND = process.env.KIND || 'openaiCompatible';
@@ -249,6 +250,24 @@ const TASKS = {
       };
     }
   },
+  // Skills and slash commands: the format lives only in a skill.
+  skill: {
+    files: {
+      'CHANGES.md': '# Changes\n\n## 1.1 (2026-10-02)\n\n- 🐛 Fixed: the date picker skipped Sundays.\n',
+      '.najwa/skills/changelog/SKILL.md': '---\ndescription: How to write entries in CHANGES.md\n---\nNewest version first, under "## <version> (<date>)", date as YYYY-MM-DD. Each line starts with an emoji and a word: 🐛 Fixed:, ✨ Added:, or 🔧 Changed:. One line each, in plain words for users.\n'
+    },
+    ask: '/note 1.2 2026-11-09: the login button now works on small screens, and you can export chats as PDF',
+    commands: { note: 'Add a CHANGES.md entry for version $ARGUMENTS' },
+    mode: 'edits',
+    check: (root, log) => {
+      const c = read(root, 'CHANGES.md') || '';
+      return {
+        'loaded the skill': log.calls.some((x) => x.name === 'use_skill'),
+        'newest first': c.indexOf('## 1.2 (2026-11-09)') > 0 && c.indexOf('## 1.2') < c.indexOf('## 1.1'),
+        'its format': /🐛 Fixed:.*login/i.test(c) && /✨ Added:.*PDF/i.test(c)
+      };
+    }
+  },
   // The budget guard: a tiny token budget, and "Stop" at its question.
   'budget-stop': {
     files: {
@@ -284,6 +303,7 @@ async function runTask(name, task) {
   fs.rmSync(root, { recursive: true, force: true });
   fs.mkdirSync(root, { recursive: true });
   write(root, task.files);
+  for (const [name, text] of Object.entries(task.commands || {})) write(root, { [`.najwa/commands/${name}.md`]: text });
   if (task.git) {
     const g = (...args) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
     g('init', '-q', '-b', 'main');
@@ -310,7 +330,7 @@ async function runTask(name, task) {
     root,
     chatId: `real-${name}`,
     mode: task.mode,
-    options: { rules: [], dryRun: 'risky', prices: process.env.PRICES || '', ...(task.options || {}) },
+    options: { rules: [], dryRun: 'risky', prices: process.env.PRICES || '', skillDirs: [], ...(task.options || {}) },
     model: MODEL,
     firewall,
     approve: async (card) => {
@@ -337,7 +357,8 @@ async function runTask(name, task) {
     const res = await chatWithTools({
       kind: KIND,
       cfg,
-      req: { model: MODEL, system: tools.system, messages: [{ role: 'user', content: task.ask }], maxTokens: 8000 },
+      // A slash command becomes its prompt, as main.js does it.
+      req: { model: MODEL, system: tools.system, messages: [{ role: 'user', content: (expandCommand(root, task.ask) || { text: task.ask }).text }], maxTokens: 8000 },
       onDelta: () => {},
       onInfo,
       tools,

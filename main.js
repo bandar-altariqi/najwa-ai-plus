@@ -31,6 +31,7 @@ const { browsingNote } = require('./src/browser-tools');
 const { agentTools } = require('./src/agent/tools');
 const { createFirewall, isLocalModel } = require('./src/agent/firewall');
 const { createCheckpoints } = require('./src/agent/checkpoints');
+const { expandCommand, listCommands } = require('./src/agent/commands');
 const { createReviewer } = require('./src/agent/reviewer');
 const { backgroundJobs } = require('./src/agent/shell');
 const os = require('os');
@@ -296,6 +297,8 @@ const approvals = localApprovals();
 // Checkpoints (undo) live in the data folder; background commands last while
 // the app runs.
 const checkpoints = createCheckpoints(path.join(dataDir, 'agent-checkpoints'));
+// The app's own commands and skills, for every project (<data>/agent/commands, /skills).
+const agentDir = path.join(dataDir, 'agent');
 const agentJobs = backgroundJobs();
 
 const textOf = (content) => (typeof content === 'string' ? content : Array.isArray(content) ? content.map((p) => (typeof p === 'string' ? p : p && p.text) || '').join('\n') : '');
@@ -359,7 +362,7 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     root,
     chatId: req.chatId,
     mode: spec.mode || a.defaultMode || 'ask',
-    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0 },
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir] },
     model: req.model || '',
     local: isLocalModel(providerId, cfg),
     firewall,
@@ -395,6 +398,15 @@ async function runChat(providerId, req, onDelta, signal, onInfo) {
   // computer's models): "Let models use a browser" (this computer's hidden
   // browser), and this computer's connectors.
   const agentSpec = req.agent && req.agent.root ? req.agent : null;
+  // A slash command ("/review src") becomes its saved prompt for the model.
+  if (agentSpec) {
+    const last = request.messages[request.messages.length - 1];
+    const cmd = last && last.role === 'user' ? expandCommand(path.resolve(String(agentSpec.root)), textOf(last.content), [agentDir]) : null;
+    if (cmd) {
+      request.messages = [...request.messages.slice(0, -1), { ...last, content: Array.isArray(last.content) ? [{ type: 'text', text: cmd.text }, ...last.content.filter((p) => p && p.type !== 'text')] : cmd.text }];
+      onInfo({ kind: 'status', text: `/${cmd.name}` });
+    }
+  }
   if (agentSpec && !TOOL_KINDS[providerId]) throw new Error(`${provider.label} can't work in a project folder. Choose a model from Ollama, LM Studio, Claude or OpenAI.`);
   if (TOOL_KINDS[providerId] && (req.browse || req.connectors || agentSpec)) {
     const sets = [];
@@ -794,6 +806,7 @@ function registerIpc() {
     return filePaths[0];
   });
   ipcMain.handle('agent:recent', async () => existingProjects(await storage.getSettings()));
+  ipcMain.handle('agent:commands', (_e, root) => listCommands(path.resolve(String(root || '')), [agentDir]).map(({ name, description }) => ({ name, description })));
   ipcMain.handle('agent:checkpoints', (_e, chatId) => checkpoints.list(String(chatId)));
   ipcMain.handle('agent:undo', (_e, chatId, id) => checkpoints.undo(String(chatId), id || null));
 

@@ -1448,6 +1448,32 @@ function updateComposer() {
   }
 }
 
+// Najwa AI Plus: typing "/" in a chat with a project folder (on this
+// computer) lists the slash commands it has (src/agent/commands.js).
+const commandLists = new Map();   // root -> { at, list }
+async function commandHint() {
+  const v = el.input.value;
+  const p = S.current ? projectOf(S.current) : null;
+  if (!p || p.computerId || !api.agent || !api.agent.commands || !/^\/[\w-]*$/.test(v)) {
+    if (S.commandHint) {
+      S.commandHint = false;
+      updateComposer();
+    }
+    return;
+  }
+  let got = commandLists.get(p.root);
+  if (!got || Date.now() - got.at > 30000) {
+    got = { at: Date.now(), list: await api.agent.commands(p.root).catch(() => []) };
+    commandLists.set(p.root, got);
+  }
+  if (el.input.value !== v) return;
+  const want = v.slice(1).toLowerCase();
+  const list = got.list.filter((c) => c.name.toLowerCase().startsWith(want)).slice(0, 6);
+  S.commandHint = true;
+  el.hint.classList.remove('model-note');
+  el.hint.textContent = list.length ? list.map((c) => `/${c.name}: ${c.description}`).join(' · ') : 'No command by that name. Add one as .najwa/commands/<name>.md in the project.';
+}
+
 // While a reply is written: Stop, and Send as soon as there's something to
 // send (it waits for the reply, see queued).
 function updateSendButton() {
@@ -4243,6 +4269,7 @@ function bindEvents() {
     autoGrow();
     updateSendButton();
     saveDraft(draftKey(), el.input.value);
+    commandHint();
   });
   el.input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.isComposing) {

@@ -30,6 +30,7 @@ const { reviewNote } = require('./reviewer');
 const { agentPrompt } = require('./instructions');
 const { createBudget } = require('./budget');
 const { gitTools, GIT_DEFS, GIT_READ_ONLY } = require('./git');
+const { listSkills, loadSkill } = require('./commands');
 
 const MAX_READ_LINES = 2000;
 const MAX_READ_CHARS = 100000;
@@ -135,9 +136,14 @@ const DEFS = {
   }
 };
 
-Object.assign(DEFS, GIT_DEFS);
+Object.assign(DEFS, GIT_DEFS, {
+  use_skill: {
+    description: 'Load one of the skills listed in your instructions: its full instructions, and the files that come with it. Load a skill when the task matches its description.',
+    parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
+  }
+});
 
-const READ_ONLY = new Set(['list_files', 'read_file', 'find_files', 'search_files', 'command_output', 'todo_write', ...GIT_READ_ONLY]);
+const READ_ONLY = new Set(['list_files', 'read_file', 'find_files', 'search_files', 'command_output', 'todo_write', 'use_skill', ...GIT_READ_ONLY]);
 
 const quote = (s, n = 60) => {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
@@ -157,6 +163,7 @@ function describe(call) {
     case 'command_output': return `Checking ${a.id}`;
     case 'stop_command': return `Stopping ${a.id}`;
     case 'todo_write': return 'Updating the to-do list';
+    case 'use_skill': return `Using the skill ${quote(a.name, 40)}`;
     case 'git_status': return 'Checking Git status';
     case 'git_diff': return `Looking at the changes${a.path ? ` in ${quote(a.path, 60)}` : ''}`;
     case 'git_log': return 'Reading the Git history';
@@ -166,7 +173,7 @@ function describe(call) {
 }
 
 function emoji(call) {
-  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿' }[call.name] || '🛠️';
+  return { list_files: '📁', read_file: '📄', find_files: '🔎', search_files: '🔎', write_file: '✏️', edit_file: '✏️', run_command: '🖥️', command_output: '🖥️', stop_command: '🖥️', todo_write: '📋', git_status: '🌿', git_diff: '🌿', git_log: '🌿', git_commit: '🌿', use_skill: '🧩' }[call.name] || '🛠️';
 }
 
 const isBinary = (buf) => buf.subarray(0, 8000).includes(0);
@@ -353,8 +360,34 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     }
   });
 
+  // Skills (commands.js): the project's and the app's.
+  const skills = listSkills(root, options.skillDirs || []);
+
   const tools = {
     ...git,
+    use_skill(args) {
+      const skill = loadSkill(skills, args.name, root);
+      if (!skill) return { text: `There's no skill called ${args.name}. Skills: ${skills.map((s) => s.name).join(', ') || 'none'}.`, error: true };
+      let text = skill.text;
+      if (skill.files.length && skill.readable) text += `\n\nFiles with this skill (read them with read_file when you need them):\n${skill.files.join('\n')}`;
+      else if (skill.files.length) {
+        // A skill kept in the app's folder (outside the project): its small text files come along.
+        let room = 40000;
+        for (const f of skill.files) {
+          const full = path.join(skills.find((s) => s.name === skill.name).dir, f);
+          let body = null;
+          try {
+            if (fs.statSync(full).size <= 20000) body = fs.readFileSync(full, 'utf8');
+          } catch {
+            // a folder or unreadable
+          }
+          if (body == null || isBinary(Buffer.from(body)) || body.length > room) continue;
+          room -= body.length;
+          text += `\n\n--- ${f} ---\n${body}`;
+        }
+      }
+      return { text: see(text).text, label: `Loaded the skill ${skill.name}` };
+    },
     git_commit(args, signal) {
       const rule = perms.forCommand('git commit');
       if (rule.decision === 'refuse') return { text: rule.why, error: true, label: 'Git commit (plan mode)' };
@@ -523,7 +556,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
   };
 
   return {
-    defs: Object.entries(DEFS).map(([name, d]) => ({ name, ...d })),
+    defs: Object.entries(DEFS).filter(([name]) => name !== 'use_skill' || skills.length).map(([name, d]) => ({ name, ...d })),
     owns: (name) => Object.prototype.hasOwnProperty.call(DEFS, name),
     describe,
     emoji,
@@ -541,7 +574,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     close() {},
     // Budget guard (src/agent/budget.js): the task's tokens and cost, and its cap.
     budget: createBudget({ model, local, prices: options.prices || '', capUsd: Number(options.budgetUsd) || 0, capTokens: Number(options.budgetTokens) || 0, approve, onInfo }),
-    system: agentPrompt({ root, mode: perms.mode, firewall: firewall.active, dryRun: dryRunSetting !== 'off', reviewer: !!reviewer }),
+    system: agentPrompt({ root, mode: perms.mode, firewall: firewall.active, dryRun: dryRunSetting !== 'off', reviewer: !!reviewer, skills }),
     maxSteps: 150,
     contextBudget: 300000,
     hidden: () => hidden
