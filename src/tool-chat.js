@@ -279,9 +279,39 @@ async function chatWithTools({ kind, cfg, req, onDelta, signal, onInfo = () => {
   }
 }
 
+// Long agent tasks: once the tool results so far get big, the older ones are
+// cut down to their start (the newest few stay whole), so the model keeps room
+// to work. Works on each API's own message shapes.
+function compactResults(extra, budget, keep = 6) {
+  const holders = [];
+  for (const m of extra) {
+    if (m.role === 'tool' && typeof m.content === 'string') holders.push({ get: () => m.content, set: (v) => { m.content = v; } });
+    else if (Array.isArray(m.content)) {
+      for (const b of m.content) {
+        if (b && b.type === 'tool_result' && typeof b.content === 'string') holders.push({ get: () => b.content, set: (v) => { b.content = v; } });
+      }
+    }
+  }
+  let total = holders.reduce((n, x) => n + x.get().length, 0);
+  if (total <= budget) return 0;
+  let trimmed = 0;
+  for (const x of holders.slice(0, Math.max(0, holders.length - keep))) {
+    const text = x.get();
+    if (text.length <= 600 || text.startsWith('[Older result, shortened')) continue;
+    const short = `[Older result, shortened to save room. Run the tool again if you need it all.]\n${text.slice(0, 500)}…`;
+    x.set(short);
+    total -= text.length - short.length;
+    trimmed++;
+    if (total <= budget) break;
+  }
+  return trimmed;
+}
+
 async function toolLoop({ k, cfg, req, w, extra, inbox, working, signal, onInfo, tools }) {
   let turn;
+  const maxSteps = tools.maxSteps || MAX_STEPS;
   for (let step = 0; ; step++) {
+    if (tools.contextBudget) compactResults(extra, tools.contextBudget);
     try {
       turn = await k.turn(cfg, req, tools.defs, extra, w, signal);
     } catch (err) {
@@ -301,17 +331,18 @@ async function toolLoop({ k, cfg, req, w, extra, inbox, working, signal, onInfo,
       const label = tools.describe(call);
       onInfo({ kind: 'tool', id, emoji: tools.emoji ? tools.emoji(call) : '🌐', label, status: 'running' });
       let r;
-      if (step >= MAX_STEPS) {
+      if (step >= maxSteps) {
         r = { text: 'You\'ve used enough tools for this reply. Answer the user now with what you found.', error: true };
       } else {
         try {
-          r = await tools.run(call.name, call.args || {}, signal);
+          r = await tools.run(call.name, call.args || {}, signal, { id, label });
         } catch (err) {
           if (signal && signal.aborted) throw abortError();
           r = { text: `That didn't work: ${err.message || err}`, error: true };
         }
       }
-      onInfo({ kind: 'tool', id, label: r.error ? `${label} (didn't work)` : label, relabel: true, status: 'completed' });
+      const done = r.label || label;
+      onInfo({ kind: 'tool', id, label: r.error && !r.label ? `${done} (didn't work)` : done, relabel: true, status: 'completed' });
       if (r.image) onInfo({ kind: 'shot', src: r.image, label });
       results.push(r);
     }
@@ -339,12 +370,15 @@ function combineTools(sets) {
       const t = owner(call.name);
       return t && t.emoji ? t.emoji(call) : '🌐';
     },
-    run: (name, args, signal) => {
+    run: (name, args, signal, step) => {
       const t = owner(name);
-      return t ? t.run(name, args, signal) : Promise.resolve({ text: `There's no tool called ${name}.`, error: true });
+      return t ? t.run(name, args, signal, step) : Promise.resolve({ text: `There's no tool called ${name}.`, error: true });
     },
-    close: () => live.forEach((t) => t.close && t.close())
+    close: () => live.forEach((t) => t.close && t.close()),
+    // The largest wins: an agent set asks for more steps and room than a browser.
+    maxSteps: Math.max(0, ...live.map((t) => t.maxSteps || 0)) || undefined,
+    contextBudget: Math.max(0, ...live.map((t) => t.contextBudget || 0)) || undefined
   };
 }
 
-module.exports = { chatWithTools, combineTools, TOOL_KINDS, MAX_STEPS };
+module.exports = { chatWithTools, combineTools, compactResults, TOOL_KINDS, MAX_STEPS };
