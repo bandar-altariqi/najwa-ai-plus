@@ -34,6 +34,7 @@ const { createCheckpoints } = require('./src/agent/checkpoints');
 const { helperRunner, chooseHelper } = require('./src/agent/helpers');
 const { tailscaleMachines } = require('./src/agent/homelab');
 const { createRecorder, listRuns, loadRun, scrubRun, replayHtml } = require('./src/agent/replay');
+const { compactMessages, summaryStore, SUMMARY_SYSTEM } = require('./src/agent/compact');
 const { expandCommand, listCommands } = require('./src/agent/commands');
 const { createReviewer } = require('./src/agent/reviewer');
 const { backgroundJobs } = require('./src/agent/shell');
@@ -303,6 +304,7 @@ const checkpoints = createCheckpoints(path.join(dataDir, 'agent-checkpoints'));
 // The app's own commands and skills, for every project (<data>/agent/commands, /skills).
 const agentDir = path.join(dataDir, 'agent');
 const runsDir = path.join(dataDir, 'agent-runs');
+const summaries = summaryStore(path.join(dataDir, 'agent-summaries'));
 const agentJobs = backgroundJobs();
 
 const textOf = (content) => (typeof content === 'string' ? content : Array.isArray(content) ? content.map((p) => (typeof p === 'string' ? p : p && p.text) || '').join('\n') : '');
@@ -456,6 +458,17 @@ async function runChatInner(providerId, req, onDelta, signal, onInfo) {
   }
   if (agentSpec && settings.agent && settings.agent.localOnly && !isLocalModel(providerId, cfg)) {
     throw new Error('Local only is on (Settings → Agent): choose a model on this computer or your network for this project, or turn it off.');
+  }
+  // Compaction: a long agent chat's older messages go to the model as a summary.
+  if (agentSpec && TOOL_KINDS[providerId] && req.chatId) {
+    const res = await compactMessages({
+      chatId: req.chatId,
+      messages: request.messages,
+      store: summaries,
+      onStatus: (text) => { if (onInfo) onInfo({ kind: 'status', text }); },
+      summarize: (text) => plainReply(providerId, cfg, { model: request.model, system: SUMMARY_SYSTEM, messages: [{ role: 'user', content: text }], maxTokens: 2000, temperature: 0 }, signal)
+    }).catch(() => ({ messages: request.messages, compacted: 0 }));
+    request.messages = res.messages;
   }
   if (agentSpec && !TOOL_KINDS[providerId]) throw new Error(`${provider.label} can't work in a project folder. Choose a model from Ollama, LM Studio, Claude or OpenAI.`);
   if (TOOL_KINDS[providerId] && (req.browse || req.connectors || agentSpec)) {
