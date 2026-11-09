@@ -3739,9 +3739,9 @@ function openSettings(tab = 'general') {
         field('Private files (only models on your computer or network can read them)', privateFiles, 'One pattern a line, e.g. backups/** or *.sqlite. Keys and certificates (*.pem, *.key, id_rsa, .ssh/) and secrets/ are always private.'),
         field('Commands always allowed', rules, 'One a line: commands starting like this run without asking (in every mode but Plan only). "Always allow" on a card adds one here.'),
         field('Machines (homelab)', h('div', {}, machines, api.agent && api.agent.tailscale ? findTailscale : null), 'The agent can work on these over SSH (your keys; it never types a password), one a line: name = user@host : look, ask or auto. look: only commands that look (docker ps, df, logs). ask: changes are asked. auto: changes run, risky ones (deleting containers or data, reboots) are still asked.'),
-        field('Budget per task, in dollars', budgetUsd, 'When a task reaches it, the agent stops and asks before spending more. Needs the model\'s price below.'),
+        field('Budget per task, in dollars', budgetUsd, 'When a task reaches it, the agent stops and asks before spending more. Needs the provider\'s prices (Models & providers).'),
         field('Budget per task, in tokens', budgetTokens, 'The same, counted in tokens (works without prices, for any model).'),
-        field('Model prices', prices, 'Dollars per million tokens, input / output, one model a line; add a third price for cached input (prompt caching, usually cheaper): deepseek-flash = 0.1 / 0.4 / 0.01. A * at the end matches the start of a name. Models on this computer cost nothing. Each task shows its tokens and cost as it works.')
+        field('Prices for specific models (optional)', prices, 'Each provider\'s prices go in Models & providers. Only for a model priced differently from the rest of its provider: one a line, dollars per million tokens, input / output / cached input, e.g. deepseek-v4-pro = 0.66 / 1.98 / 0.022. A * at the end matches the start of a name. Models on this computer cost nothing.')
       ];
     },
     general() {
@@ -3781,6 +3781,27 @@ function openSettings(tab = 'general') {
 
     providers() {
       const cards = [];
+      // Najwa AI Plus: this provider's prices, typed by the user (optional), so
+      // the agent shows each task's cost. Never fetched or guessed.
+      const priceFields = (p) => {
+        const price = p.price || {};
+        const box = (key, placeholder) => {
+          const input = h('input', { class: 'input', type: 'text', inputmode: 'decimal', dir: 'ltr', placeholder, value: price[key] != null ? String(price[key]) : '' });
+          input.addEventListener('input', () => {
+            const v = input.value.replace(/[$,\s]/g, '');
+            const next = { ...(p.price || {}) };
+            if (v === '' || !Number.isFinite(Number(v)) || Number(v) < 0) delete next[key];
+            else next[key] = Number(v);
+            if (Object.keys(next).length) p.price = next;
+            else delete p.price;
+            changed();
+          });
+          return input;
+        };
+        return field('Price per million tokens, in dollars (optional)',
+          h('div', { class: 'price-row' }, box('input', 'Input'), box('output', 'Output'), box('cached', 'Cached input')),
+          'From your provider\'s pricing page, to see what each agent task costs. Cached input is optional (it\'s counted at the input price without it). Leave empty to see tokens only.');
+      };
       const help = S.info.mobile ? {
         ollama: 'Use Ollama running on your computer over Wi-Fi. On the computer, set OLLAMA_HOST=0.0.0.0 and OLLAMA_ORIGINS=*, restart Ollama, then enter http://<computer IP>:11434 here.',
         openaiCompatible: 'LM Studio (or llama.cpp, Jan…) on your computer. In LM Studio turn on "Serve on local network" and "Enable CORS", then enter http://<computer IP>:1234/v1 here.'
@@ -3836,6 +3857,7 @@ function openSettings(tab = 'general') {
             bind(h('input', { type: 'checkbox', checked: p.think !== false }), p, 'think'),
             'Let thinking models think first (better answers; turn off for faster replies)') : null,
           'apiKey' in p ? field('API key', bind(h('input', { class: 'input', type: 'password', value: p.apiKey, placeholder: id === 'openaiCompatible' ? 'Optional' : 'Paste your key' }), p, 'apiKey', (v) => v.trim())) : null,
+          ['anthropic', 'openai', 'openaiCompatible'].includes(id) ? priceFields(p) : null,
           id === 'hermes' ? h('label', { class: 'check' },
             bind(h('input', { type: 'checkbox', checked: !!p.shareMemory }), p, 'shareMemory'),
             'Also give Hermes my Najwa AI memory and earlier chats (Hermes has its own memory, so this is off by default)') : null,

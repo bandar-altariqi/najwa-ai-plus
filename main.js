@@ -388,7 +388,7 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     root,
     chatId: req.chatId,
     mode: spec.mode || a.defaultMode || 'ask',
-    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperFor(providerId, cfg, req.model || '', a, settings, onInfo), machines: a.machines || '' },
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, providerPrice: cfg.price || null, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperFor(providerId, cfg, req.model || '', a, settings, onInfo), machines: a.machines || '' },
     model: req.model || '',
     local: isLocalModel(providerId, cfg),
     firewall,

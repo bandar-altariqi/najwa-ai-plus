@@ -6,7 +6,9 @@
 // live, and a cap. When the task reaches the cap the user is asked before it
 // spends more ("Keep going" allows as much again, "Stop" ends the task).
 //
-// Prices are the user's own (Settings → Agent), per million tokens, one model
+// Prices are the user's own, never fetched or guessed: each provider's price
+// fields (Settings → Models & providers), or for one model a line in Settings →
+// Agent → Prices for specific models, per million tokens, one model
 // per line:   deepseek-flash = 0.1 / 0.4      (input / output, in dollars)
 // or with a third price for input the provider had cached (prompt caching,
 // usually much cheaper):   deepseek-flash = 0.1 / 0.4 / 0.01
@@ -53,8 +55,23 @@ const fmtUsd = (n) => `$${n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2)}`;
  * @param approve   asks the user ({ title, command, description, choices, kind }) -> 'once' | 'deny'
  * @param onInfo    gets { kind: 'usage', ... } after each step
  */
-function createBudget({ model, local = false, prices = '', capUsd = 0, capTokens = 0, approve, onInfo = () => {} }) {
-  const price = local ? { input: 0, output: 0, cached: 0 } : priceFor(parsePrices(prices), model);
+/** A provider's price fields ({ input, output, cached }, dollars per million) -> a price, or null. */
+function providerPrice(p) {
+  if (!p) return null;
+  const num = (v) => (v === '' || v == null ? NaN : Number(v));
+  const input = num(p.input);
+  const output = num(p.output);
+  if (!Number.isFinite(input) || !Number.isFinite(output) || input < 0 || output < 0) return null;
+  const cached = num(p.cached);
+  return { input, output, cached: Number.isFinite(cached) && cached >= 0 ? cached : input };
+}
+
+/**
+ * Prices: a line in `prices` for the model wins; else the provider's price
+ * fields (Settings → Models & providers); else tokens only.
+ */
+function createBudget({ model, local = false, prices = '', provider = null, capUsd = 0, capTokens = 0, approve, onInfo = () => {} }) {
+  const price = local ? { input: 0, output: 0, cached: 0 } : (priceFor(parsePrices(prices), model) || providerPrice(provider));
   const total = { input: 0, output: 0, cached: 0, steps: 0 };
   let usd = 0;
   let allowUsd = capUsd > 0 ? capUsd : 0;
@@ -108,4 +125,4 @@ function createBudget({ model, local = false, prices = '', capUsd = 0, capTokens
   };
 }
 
-module.exports = { createBudget, parsePrices, priceFor, fmtTokens, fmtUsd };
+module.exports = { createBudget, parsePrices, priceFor, providerPrice, fmtTokens, fmtUsd };

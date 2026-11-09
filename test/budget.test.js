@@ -62,3 +62,23 @@ test('budget: cached input at its own price', () => {
   assert.strictEqual(b.totals.cached, 8100);
   assert.match(b.summary(), /10\.1k in, 8\.1k of them cached/);
 });
+
+test('budget: the provider\'s prices, and a line for one model wins', () => {
+  const { providerPrice } = require('../src/agent/budget');
+  assert.deepStrictEqual(providerPrice({ input: 0.15, output: 0.6, cached: 0.003 }), { input: 0.15, output: 0.6, cached: 0.003 });
+  assert.deepStrictEqual(providerPrice({ input: '0.15', output: '0.6' }), { input: 0.15, output: 0.6, cached: 0.15 });   // no cached price: the input price
+  assert.strictEqual(providerPrice({ input: 0.15 }), null);   // both input and output, or none
+  assert.strictEqual(providerPrice({ input: -1, output: 1 }), null);
+  assert.strictEqual(providerPrice(null), null);
+  const provider = { input: 1, output: 2, cached: 0.1 };
+  const byProvider = createBudget({ model: 'deepseek-flash', provider, approve: async () => 'once' });
+  byProvider.add({ input: 1000000, output: 0, cached: 0 });
+  assert.strictEqual(byProvider.usd, 1);
+  const byLine = createBudget({ model: 'deepseek-v4-pro', prices: 'deepseek-v4-pro = 3 / 6', provider, approve: async () => 'once' });
+  byLine.add({ input: 1000000, output: 0 });
+  assert.strictEqual(byLine.usd, 3);
+  const none = createBudget({ model: 'x', approve: async () => 'once' });
+  none.add({ input: 1000, output: 10 });
+  assert.match(none.summary(), /^1\.0k tokens/);
+  assert.doesNotMatch(none.summary(), /\$/);
+});

@@ -637,7 +637,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     meter,
     close() {},
     // Budget guard (src/agent/budget.js): the task's tokens and cost, and its cap.
-    budget: createBudget({ model, local, prices: options.prices || '', capUsd: Number(options.budgetUsd) || 0, capTokens: Number(options.budgetTokens) || 0, approve, onInfo }),
+    budget: createBudget({ model, local, prices: options.prices || '', provider: options.providerPrice || null, capUsd: Number(options.budgetUsd) || 0, capTokens: Number(options.budgetTokens) || 0, approve, onInfo }),
     system: agentPrompt({ root, mode: perms.mode, firewall: firewall.active, dryRun: dryRunSetting !== 'off', reviewer: !!reviewer, skills, hooks: !!loadHooks(root), machines }),
     maxSteps: 150,
     contextBudget: 300000,
