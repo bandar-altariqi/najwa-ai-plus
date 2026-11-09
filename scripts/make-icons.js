@@ -2,12 +2,13 @@
 // Licensed under the Najwa AI License (see LICENSE): non-commercial use only;
 // keep the Najwa AI name and the "Najwa AI by Bandar Altariqi" credit; no rebranding.
 
-// Draws the Najwa AI icon and writes the desktop icon, the website logos, and
+// Draws the Najwa AI Plus icon and writes the desktop icon, the website logos, and
 // the Android and iOS launcher icons and splash screens.
 //
-// The mark: a white N, you, over a rose chat bubble, Najwa answering, with a
-// sparkle for AI, on deep navy. build/icon.svg is the same artwork as a
-// vector, for print and the web.
+// The mark: a white N, you, over a chat bubble, Najwa answering, with a
+// sparkle for AI, and the word PLUS under it. Plus is deep violet and gold
+// where Najwa AI is navy and rose, so the two apps look apart side by side.
+// build/icon.svg is the same artwork as a vector, for print and the web.
 //
 //   node scripts/make-icons.js      (needs the dev dependency @resvg/resvg-js)
 
@@ -17,17 +18,36 @@ const zlib = require('zlib');
 const { Resvg } = require('@resvg/resvg-js');
 
 const root = path.resolve(__dirname, '..');
-const NAVY_TOP = '#2d4372';
-const NAVY_BOTTOM = '#1c2b4d';
-const NAVY_FLAT = '#25395f';   // Android's adaptive icon background (one colour)
+const NAVY_TOP = '#3f3178';     // violet (Najwa AI: navy #2d4372 → #1c2b4d)
+const NAVY_BOTTOM = '#241a4d';
+const NAVY_FLAT = '#31265f';   // Android's adaptive icon background (one colour)
+const GOLD = '#f2b45c';        // the bubble and PLUS (Najwa AI: rose #e3968d)
 
 // The mark in a 512×512 design space.
-const mark = ({ n = '#ffffff', bubble = '#e3968d', spark = '#ffffff' } = {}) => `
-  <g transform="translate(-6 -10)">
+// PLUS is drawn in round strokes like the N (cap height 44), so no font is needed.
+const PLUS_LETTERS = [
+  ['M0 44V0H16a13 13 0 0 1 0 26H0', 29],
+  ['M0 0V44H26', 26],
+  ['M0 0V29a14 14 0 0 0 28 0V0', 28],
+  ['M27 7C24 2 19 0 14 0C7 0 1 4 1 11C1 25 28 19 28 33C28 40 22 44 14 44C8 44 3 42 0 37', 28]
+];
+const plusWord = (color) => {
+  const gap = 17;
+  let x = 256 - (PLUS_LETTERS.reduce((n, [, w]) => n + w, 0) + gap * (PLUS_LETTERS.length - 1)) / 2;
+  const letters = PLUS_LETTERS.map(([d, w]) => {
+    const p = `<path transform="translate(${x} 0)" d="${d}"/>`;
+    x += w + gap;
+    return p;
+  }).join('');
+  return `<g transform="translate(0 362)" fill="none" stroke="${color}" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">${letters}</g>`;
+};
+
+const mark = ({ n = '#ffffff', bubble = GOLD, spark = '#ffffff', word = GOLD } = {}) => `
+  <g transform="translate(256 214) scale(0.8) translate(-256 -256)"><g transform="translate(-6 -10)">
     <path fill="${bubble}" d="M226 130H346A62 62 0 0 1 408 192V290A62 62 0 0 1 346 352H344L374 402L302 352H226A62 62 0 0 1 164 290V192A62 62 0 0 1 226 130Z"/>
     <path fill="none" stroke="${n}" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" d="M150 362V160L318 362V160"/>
     <path fill="${spark}" d="M366 150q5 22 27 27q-22 5-27 27q-5-22-27-27q22-5 27-27z"/>
-  </g>`;
+  </g></g>${plusWord(word)}`;
 const MARK_DARK = mark();
 
 const gradient = `<linearGradient id="navy" x1="0" y1="0" x2="0" y2="1">
