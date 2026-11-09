@@ -112,6 +112,18 @@ test('Hermes Agent and a computer\'s models: the message waits, the reply is not
   }
 });
 
+test('Najwa AI Plus: the agent in a computer\'s folder takes the message; if it can\'t yet, it waits (never interrupted)', async () => {
+  for (const takes of [true, false]) {
+    const w = world({ model: provider('computer', 'qwen'), steerTakes: takes });
+    w.chat.project = { root: '/home/me/shop', computerId: 'desk', mode: 'ask' };
+    w.startReply();
+    await w.fns.sendWhileReplying(w.chat, 'also the README', []);
+    assert.deepStrictEqual(w.log.steered, ['also the README']);
+    assert.deepStrictEqual(w.log.aborted, []);
+    assert.strictEqual((w.fns.queued.get(w.chat) || []).length, takes ? 0 : 1);
+  }
+});
+
 test('the queue sends one message at a time, in order, after each reply', () => {
   const w = world({ model: provider('hermes') });
   w.fns.queued.set(w.chat, [{ text: 'one', images: [] }, { text: 'two', images: [] }, { text: 'three', images: [] }]);
