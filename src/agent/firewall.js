@@ -42,12 +42,15 @@ const TOKEN_PATTERNS = [
 
 // Names whose value is a secret: API_KEY=…, "password": "…", token: …
 const SECRET_NAME = '[A-Za-z0-9_.-]*(?:secret|token|passw(?:or)?d|passwd|pwd|api[_-]?key|apikey|private[_-]?key|access[_-]?key|client[_-]?secret|auth|credential|cookie|session[_-]?key|dsn)[A-Za-z0-9_.-]*';
+// What the agent's tools put before a line: read_file's line number
+// ("   12  ") or search_files' "path:12: ". A secret after it is still a secret.
+const LINE_PREFIX = '(?:[ \\t]*\\d+[ \\t]{2}|[^\\s:]+:\\d+:[ \\t]?)?';
 const ASSIGNMENTS = [
   // KEY=value and export KEY=value (.env, shell)
-  new RegExp(`^(\\s*(?:export\\s+)?${SECRET_NAME}\\s*=\\s*)(["']?)([^\\s"'#][^"'\\n#]*?)\\2(\\s*(?:#.*)?)$`, 'gim'),
+  new RegExp(`^(${LINE_PREFIX}\\s*(?:export\\s+)?${SECRET_NAME}\\s*=\\s*)(["']?)([^\\s"'#][^"'\\n#]*?)\\2(\\s*(?:#.*)?)$`, 'gim'),
   // "key": "value" (JSON) and key: value (YAML)
   new RegExp(`((["']?)${SECRET_NAME}\\2\\s*:\\s*)(["'])([^"'\\n]+)\\3`, 'gi'),
-  new RegExp(`^(\\s*${SECRET_NAME}\\s*:\\s+)([^\\s"'#{[&*!|>][^\\n#]*?)(\\s*(?:#.*)?)$`, 'gim')
+  new RegExp(`^(${LINE_PREFIX}\\s*${SECRET_NAME}\\s*:\\s+)([^\\s"'#{[&*!|>][^\\n#]*?)(\\s*(?:#.*)?)$`, 'gim')
 ];
 // user:password@ in addresses (databases, proxies)
 const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)([^\s@/]+)(@)/gi;
@@ -130,7 +133,9 @@ function createFirewall({ enabled = true, cloud = true, privateGlobs = [] } = {}
       }
     },
     isPrivate: (rel) => isPrivate(rel),
-    hiddenTotal: () => hiddenTotal
+    hiddenTotal: () => hiddenTotal,
+    // How many different secrets have been hidden (the privacy meter).
+    secretsHidden: () => byMark.size
   };
 }
 
