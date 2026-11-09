@@ -24,6 +24,7 @@ const { createReviewer } = require('../../src/agent/reviewer');
 const { backgroundJobs } = require('../../src/agent/shell');
 const { expandCommand } = require('../../src/agent/commands');
 const { helperRunner } = require('../../src/agent/helpers');
+const { createRecorder, scrubRun, replayHtml } = require('../../src/agent/replay');
 const { PROVIDERS } = require('../../src/providers');
 
 const KIND = process.env.KIND || 'openaiCompatible';
@@ -357,7 +358,10 @@ async function runTask(name, task) {
         return PROVIDERS[KIND].impl.streamChat(cfg, { model: process.env.REVIEWER, ...r }, (piece) => { text += piece; }, sig, () => {}).then(() => { log.reviews.push(text); return text; });
       } })
     : null;
+  // Each run is recorded like the app does, and saved as its replay page.
+  const rec = createRecorder({ dir: path.join(DIR, 'runs'), chatId: name, task: task.ask, model: MODEL, project: name });
   const onInfo = (i) => {
+    rec.info(i);
     if (i.kind === 'tool' && i.status === 'completed') log.steps.push(i.label);
     if (i.kind === 'todo') log.todo = i.items;
     if (i.kind === 'usage') log.usage = i;
@@ -371,6 +375,8 @@ async function runTask(name, task) {
     firewall,
     approve: async (card) => {
       const choice = task.deny || (card.kind === 'budget' && task.stopAtBudget) ? 'deny' : 'once';
+      rec.info({ kind: 'approval', title: card.title, command: card.command, description: card.description, askKind: card.kind });
+      setTimeout(() => rec.info({ kind: 'answer', title: card.title, choice }), 0);
       log.cards.push({ title: card.title, kind: card.kind, command: String(card.command || '').slice(0, 1500), description: card.description || '', choice });
       return choice;
     },
@@ -395,7 +401,7 @@ async function runTask(name, task) {
       cfg,
       // A slash command becomes its prompt, as main.js does it.
       req: { model: MODEL, system: tools.system, messages: [{ role: 'user', content: (expandCommand(root, task.ask) || { text: task.ask }).text }], maxTokens: 8000 },
-      onDelta: () => {},
+      onDelta: (p) => rec.delta(p),
       onInfo,
       tools,
       signal: AbortSignal.timeout(15 * 60 * 1000)
@@ -406,6 +412,8 @@ async function runTask(name, task) {
     log.error = String(err && err.message ? err.message : err);
   }
   log.seconds = Math.round((Date.now() - started) / 1000);
+  const wall = createFirewall({ cloud: true });
+  fs.writeFileSync(path.join(DIR, `${name}.html`), replayHtml(scrubRun(rec.finish(log.error), (t) => wall.scrub(t).text)));
   log.text = log.text.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
   log.checks = log.error ? { 'no error': false } : task.check(root, log);
   fs.writeFileSync(path.join(DIR, `${name}.json`), JSON.stringify({ ...log, sent: undefined }, null, 2));

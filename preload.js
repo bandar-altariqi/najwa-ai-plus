@@ -226,6 +226,9 @@ contextBridge.exposeInMainWorld('balimda', {
     recent: invoke('agent:recent'),
     commands: invoke('agent:commands'),
     tailscale: invoke('agent:tailscale'),
+    runs: invoke('agent:runs'),
+    run: invoke('agent:run'),
+    exportRun: invoke('agent:exportRun'),
     checkpoints: invoke('agent:checkpoints'),
     undo: invoke('agent:undo')
   },

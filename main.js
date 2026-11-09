@@ -33,6 +33,7 @@ const { createFirewall, isLocalModel } = require('./src/agent/firewall');
 const { createCheckpoints } = require('./src/agent/checkpoints');
 const { helperRunner, chooseHelper } = require('./src/agent/helpers');
 const { tailscaleMachines } = require('./src/agent/homelab');
+const { createRecorder, listRuns, loadRun, scrubRun, replayHtml } = require('./src/agent/replay');
 const { expandCommand, listCommands } = require('./src/agent/commands');
 const { createReviewer } = require('./src/agent/reviewer');
 const { backgroundJobs } = require('./src/agent/shell');
@@ -301,6 +302,7 @@ const approvals = localApprovals();
 const checkpoints = createCheckpoints(path.join(dataDir, 'agent-checkpoints'));
 // The app's own commands and skills, for every project (<data>/agent/commands, /skills).
 const agentDir = path.join(dataDir, 'agent');
+const runsDir = path.join(dataDir, 'agent-runs');
 const agentJobs = backgroundJobs();
 
 const textOf = (content) => (typeof content === 'string' ? content : Array.isArray(content) ? content.map((p) => (typeof p === 'string' ? p : p && p.text) || '').join('\n') : '');
@@ -387,7 +389,15 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     model: req.model || '',
     local: isLocalModel(providerId, cfg),
     firewall,
-    approve: approvals.asker(onInfo, signal, origin),
+    approve: (() => {
+      const ask = approvals.asker(onInfo, signal, origin);
+      // The answer goes in the run's replay too.
+      return async (card) => {
+        const choice = await ask(card);
+        onInfo({ kind: 'answer', title: card.title, choice });
+        return choice;
+      };
+    })(),
     chatAllowed: approvals.allowedFor(req.chatId ? `agent:${req.chatId}` : null),
     checkpoints,
     reviewer,
@@ -400,7 +410,22 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
   return set;
 }
 
+// Run replay (src/agent/replay.js): an agent reply is recorded as it goes.
 async function runChat(providerId, req, onDelta, signal, onInfo) {
+  if (!(req.agent && req.agent.root)) return runChatInner(providerId, req, onDelta, signal, onInfo);
+  const lastUser = [...(req.messages || [])].reverse().find((m) => m.role === 'user');
+  const rec = createRecorder({ dir: runsDir, chatId: req.chatId, task: lastUser ? textOf(lastUser.content) : '', model: req.model, project: path.basename(String(req.agent.root)) });
+  try {
+    const res = await runChatInner(providerId, req, (p) => { rec.delta(p); onDelta(p); }, signal, (i) => { rec.info(i); if (onInfo) onInfo(i); });
+    rec.finish();
+    return res;
+  } catch (err) {
+    rec.finish(err);
+    throw err;
+  }
+}
+
+async function runChatInner(providerId, req, onDelta, signal, onInfo) {
   const provider = PROVIDERS[providerId];
   if (!provider) throw new Error(`Unknown provider: ${providerId}`);
   const settings = await storage.getSettings();
@@ -830,6 +855,22 @@ function registerIpc() {
     return filePaths[0];
   });
   ipcMain.handle('agent:recent', async () => existingProjects(await storage.getSettings()));
+  ipcMain.handle('agent:runs', (_e, chatId) => listRuns(runsDir, String(chatId || '')));
+  ipcMain.handle('agent:run', (_e, id) => loadRun(runsDir, id));
+  // A run as one web page to share: secrets hidden, like for cloud models.
+  ipcMain.handle('agent:exportRun', async (_e, id) => {
+    const run = loadRun(runsDir, id);
+    if (!run) throw new Error('That run isn\'t there any more.');
+    const wall = createFirewall({ cloud: true });
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save the run as a web page',
+      defaultPath: `najwa-run-${run.startedAt.slice(0, 10)}-${run.id.slice(-6)}.html`,
+      filters: [{ name: 'Web page', extensions: ['html'] }]
+    });
+    if (canceled || !filePath) return null;
+    fs.writeFileSync(filePath, replayHtml(scrubRun(run, (t) => wall.scrub(t).text)));
+    return filePath;
+  });
   // Homelab: this computer's Tailscale machines, to add in Settings → Agent.
   ipcMain.handle('agent:tailscale', () => new Promise((resolve) => {
     require('child_process').execFile('tailscale', ['status', '--json'], { timeout: 10000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {

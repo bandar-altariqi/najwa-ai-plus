@@ -846,3 +846,16 @@ p.mono { font-family: inherit; font-size: 13px; word-break: normal; overflow-wra
 
 /* Budget guard: the task's tokens and cost. */
 .agent-usage { font-size: 12px; opacity: 0.75; margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+
+/* Run replay (Najwa AI Plus). */
+.replay-list { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow: auto; }
+.replay-choice { text-align: start; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border, rgba(128,128,128,.3)); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.replay-choice:hover { background: rgba(128,128,128,.08); }
+.replay-bar { display: flex; gap: 10px; align-items: center; margin: 6px 0 10px; flex-wrap: wrap; }
+.replay-slider { flex: 1; min-width: 160px; }
+.replay-events { max-height: 60vh; overflow: auto; }
+.replay-ev { border: 1px solid var(--border, rgba(128,128,128,.3)); border-radius: 8px; padding: 6px 10px; margin: 6px 0; overflow-wrap: anywhere; }
+.replay-ev.step { border-inline-start: 3px solid #45337f; }
+.replay-ev.ask { border-inline-start: 3px solid #d08a2c; }
+.replay-ev.text { white-space: pre-wrap; }
+.replay-t { float: inline-end; opacity: .6; font-size: 12px; margin-inline-start: 8px; }

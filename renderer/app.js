@@ -1145,6 +1145,104 @@ async function undoAgentChange(chat) {
   }
 }
 
+// ---- Run replay (Najwa AI Plus): the agent's runs as timelines -----------------
+
+async function openReplays(chat) {
+  if (!api.agent || !api.agent.runs) {
+    toast('Replays are kept on the computer the agent works on: open this chat there.');
+    return;
+  }
+  const runs = await api.agent.runs(chat.id).catch(() => []);
+  if (!runs.length) {
+    toast('The agent hasn\'t worked in this chat yet (or its runs were before replays).');
+    return;
+  }
+  const when = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const close = openModal({
+    title: 'Replay the agent\'s runs',
+    body: h('div', { class: 'replay-list' }, ...runs.map((r) => h('button', {
+      class: 'replay-choice',
+      type: 'button',
+      onclick: () => {
+        close();
+        playRun(r.id);
+      }
+    }, h('div', { dir: 'auto', text: r.task || '(no text)' }), h('div', { class: 'help', text: `${when(r.startedAt)} · ${displayModel(r.model)} · ${r.steps} step${r.steps === 1 ? '' : 's'} · ${r.seconds}s${r.error ? ' · stopped with an error' : ''}` }))))
+  });
+}
+
+async function playRun(id) {
+  const run = await api.agent.run(id);
+  if (!run) return toast('That run isn\'t there any more.');
+  const ev = run.events;
+  const out = h('div', { class: 'replay-events' });
+  const slider = h('input', { type: 'range', min: '0', max: String(ev.length), value: String(ev.length), class: 'replay-slider' });
+  const count = h('span', { class: 'help' });
+  const sec = (ms) => `${(ms / 1000).toFixed(1)}s`;
+  const ANSWERS = { once: 'Allowed', session: 'Allowed for the chat', always: 'Always allowed', deny: 'Refused' };
+  const card = (e) => {
+    if (e.kind === 'tool' && e.status === 'completed') return h('div', { class: 'replay-ev step' }, h('span', { class: 'replay-t', text: sec(e.t) }), `${e.emoji ? `${e.emoji} ` : ''}${e.label || ''}`);
+    if (e.kind === 'approval') return h('div', { class: 'replay-ev ask' }, h('span', { class: 'replay-t', text: sec(e.t) }), h('b', { text: `❓ ${e.title || 'A question'}` }), e.command ? approvalText({ askKind: e.askKind === 'edit' ? 'edit' : null, command: e.command }) : null, e.description ? h('div', { class: 'help', text: e.description }) : null);
+    if (e.kind === 'answer') return h('div', { class: 'replay-ev ask' }, h('span', { class: 'replay-t', text: sec(e.t) }), `↳ ${ANSWERS[e.choice] || e.choice}`);
+    if (e.kind === 'todo') return h('div', { class: 'replay-ev' }, h('span', { class: 'replay-t', text: sec(e.t) }), h('b', { text: '📋 To-do' }), ...(e.items || []).map((i) => h('div', { dir: 'auto', text: `${i.status === 'done' ? '✓' : i.status === 'in_progress' ? '▸' : '○'} ${i.text}` })));
+    if (e.kind === 'text') {
+      const t = String(e.text).replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
+      return t.trim() ? h('div', { class: 'replay-ev text', dir: 'auto' }, h('span', { class: 'replay-t', text: sec(e.t) }), t) : null;
+    }
+    return null;
+  };
+  const show = (k) => {
+    out.replaceChildren(...ev.slice(0, k).map(card).filter(Boolean));
+    slider.value = String(k);
+    const u = [...ev.slice(0, k)].reverse().find((e) => e.kind === 'usage');
+    count.textContent = `${k} / ${ev.length}${u ? ` · ${u.input + u.output} tokens${u.usd != null ? ` · $${u.usd.toFixed(4)}` : ''}` : ''}`;
+  };
+  let timer = null;
+  const stop = () => {
+    clearInterval(timer);
+    timer = null;
+    play.textContent = '▶ Play';
+  };
+  const play = h('button', {
+    class: 'btn',
+    type: 'button',
+    text: '▶ Play',
+    onclick: () => {
+      if (timer) return stop();
+      let k = Number(slider.value) >= ev.length ? 0 : Number(slider.value);
+      show(k);
+      play.textContent = '⏸ Pause';
+      timer = setInterval(() => {
+        do k++; while (k < ev.length && !card(ev[k - 1]));
+        show(Math.min(k, ev.length));
+        out.lastElementChild?.scrollIntoView({ block: 'nearest' });
+        if (k >= ev.length) stop();
+      }, 700);
+    }
+  });
+  slider.addEventListener('input', () => {
+    stop();
+    show(Number(slider.value));
+  });
+  show(ev.length);
+  openModal({
+    title: run.task ? run.task.slice(0, 80) : 'A run',
+    wide: true,
+    onClose: stop,
+    body: h('div', {},
+      h('p', { class: 'help', text: `${new Date(run.startedAt).toLocaleString()} · ${displayModel(run.model)} · ${run.project} · ${run.seconds}s` }),
+      h('div', { class: 'replay-bar' }, play, slider, count),
+      out),
+    buttons: [{
+      label: 'Save as a web page',
+      onClick: () => {
+        api.agent.exportRun(run.id).then((file) => { if (file) toast(`Saved (secrets hidden): ${file}`, 6000); }, (err) => toast(`Couldn't save it: ${errorText(err)}`, 6000));
+        return false;
+      }
+    }]
+  });
+}
+
 // ---- Hermes Agent: live tool steps and approvals ------------------------------
 
 const APPROVAL_LABELS = { once: 'Allow once', session: 'Allow for this chat', always: 'Always allow', deny: 'Deny' };
@@ -4332,6 +4430,7 @@ function bindEvents() {
     if (action === 'system') editCustomInstructions();
     if (action === 'export') exportCurrent();
     if (action === 'agent-undo') undoAgentChange(S.current);
+    if (action === 'agent-replay') openReplays(S.current);
     if (action === 'delete') deleteChat(S.current.id);
   });
 
