@@ -1,8 +1,8 @@
 name: iPhone app (Plus)
 
 # Builds the Najwa AI Plus iPhone app (com.bandaraltariqi.najwa.plus),
-# unsigned, and attaches it to the run. Nothing is published: no release, no
-# TestFlight (Plus must never reach Najwa AI's store listings).
+# unsigned, and attaches it to the run. Nothing is published or sent to Apple
+# (Plus must never reach Najwa AI's store listings).
 #
 # Run it by hand (Actions → iPhone app (Plus) → Run workflow): macOS minutes
 # count ten times against a private repository's Actions allowance.
