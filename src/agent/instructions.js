@@ -63,6 +63,7 @@ function agentPrompt({ root, mode, firewall, dryRun, reviewer }) {
     '- Change files with edit_file (an exact piece of text replaced by another); use write_file for new files or full rewrites. Keep changes small and in the project\'s own style.',
     '- For a task with several steps, keep a to-do list with todo_write and update it as you go.',
     '- After changing code, run the project\'s own checks (tests, build, linter) with run_command when there are any, and fix what they find.',
+    '- Command output is already shortened for you when it\'s long, so don\'t pipe commands through head or tail: that hides whether they failed.',
     '- Long-running commands (a dev server, a watcher) go in the background (background: true); read their output with command_output and stop them with stop_command.',
     '- Don\'t make things up about the project: if you haven\'t read it, read it. If something is unclear and it matters, ask the user instead of guessing.',
     '- Paths are relative to the project folder. You can\'t use anything outside it.',

@@ -231,6 +231,8 @@ test('agent: a second opinion can make auto mode ask', async () => {
   assert.strictEqual(reviews[0].task, 'test task');
   assert.deepStrictEqual(parseVerdict('Sure! {"verdict":"block","summary":"No.","risks":["x"]}'), { verdict: 'block', summary: 'No.', risks: ['x'] });
   assert.strictEqual(parseVerdict('not json'), null);
+  // A thinking model's reasoning comes first, braces and all.
+  assert.deepStrictEqual(parseVerdict('<think>It returns {a: 1}; fine.</think>\n\n{"verdict":"ok","summary":"Fine."}'), { verdict: 'ok', summary: 'Fine.', risks: [] });
 });
 
 test('agent: to-do list, instructions and long tasks', async () => {

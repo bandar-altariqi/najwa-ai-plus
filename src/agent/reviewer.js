@@ -19,7 +19,10 @@ Answer with JSON only, no other text: {"verdict": "ok" | "concern" | "block", "s
 Use "block" only for actions that are clearly harmful or clearly not what the user wanted. Use "concern" when the user should look closely. Keep the summary under 25 words.`;
 
 function parseVerdict(text) {
-  const m = String(text || '').match(/\{[\s\S]*\}/);
+  // Thinking models write their reasoning first (in <think>, which can hold
+  // braces of its own): the verdict is the JSON after it.
+  const said = String(text || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
+  const m = said.match(/\{[\s\S]*\}/);
   if (!m) return null;
   try {
     const v = JSON.parse(m[0]);

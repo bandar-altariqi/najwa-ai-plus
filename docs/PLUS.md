@@ -29,7 +29,19 @@ its replies then run as an agent there, on the desktop app.
 Tests: `test/agent.test.js` (12) and the rest of the suite (`npm test`, 295 pass).
 End to end in the real Electron app with a scripted model: `scripts/agent-e2e/`
 (`node scripts/agent-e2e/fake-model.js &` then `xvfb-run -a node scripts/agent-e2e/run.js`,
-`REVIEW=1` adds the second opinion). Not yet tried with a real model.
+`REVIEW=1` adds the second opinion).
+
+With a real model, without the window: `scripts/agent-real/run.js` runs the same
+tool loop, tools, permissions, firewall and checkpoints on ten small projects
+(fix a bug, add a feature, rename around a secret, plan mode, a "no", a question,
+a refactor, a background server, a prompt injection, copying a file with a secret)
+and checks each result. Approvals are answered by the script; steps go to
+`$AGENT_REAL_DIR/<task>.json`. For example, DeepSeek:
+`MODEL_URL=https://api.deepseek.com MODEL=deepseek-flash MODEL_KEY=… node scripts/agent-real/run.js`
+(`KIND=ollama MODEL_URL=http://127.0.0.1:11434 MODEL=qwen3:4b` for Ollama, `REVIEWER=<model>` adds the second opinion).
+First results (Nov 2026): DeepSeek V4.1 Flash and V4 Pro pass all ten, with the second opinion on.
+Found and fixed on the way: verdicts from thinking models were lost when their
+reasoning held a brace; the prompt now says not to pipe commands through head/tail.
 
 Plus has its own name, app ID (`com.bandaraltariqi.najwa.plus`) and data folder
 ("Najwa AI Plus"), so it installs beside Najwa AI. The phone, Google Play and
@@ -40,7 +52,9 @@ model-link workflows were removed: Plus must never upload to Najwa AI's Play lis
 1. **Agent in your pocket, finished:** a Plus phone app (own app ID) or the phone
    side in the regular Najwa AI app. Coloured diffs on the phone, starting work in
    a computer's folder, push notifications when the agent asks.
-2. Try it with real models (Ollama qwen3/llama3.1, Claude, OpenAI) and tune the prompt.
+2. More real models: DeepSeek done (see above). Still to try: small local ones
+   (Ollama qwen3/llama3.1, where most failures will be), Claude, OpenAI; and harder,
+   longer tasks.
 3. Phase 3, the other unique ideas:
    - 🏠 Homelab agent: Tailscale machines, SSH and Docker with per-machine permissions, one task across servers
    - 👥 Mixed crew: a big model plans, small local models work; "local only" switch
