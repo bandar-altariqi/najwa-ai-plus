@@ -42,7 +42,11 @@ its replies then run as an agent there, on the desktop app.
 | 🎙️ **Voice + Arabic**: Arabic for the agent's screens; a diff line's text keeps its own direction (`<bdi>`); with Read replies aloud, the agent's questions and finished to-do steps are said | `renderer/i18n-ar.js`, `renderer/app.js` |
 | ⏪ **Undo travels with the chat**: newest 10 changes (≤ 256 KB, gzip) in `chat.agentUndo`, synced encrypted with the chat; a computer with no history of its own undoes in its own project folder (paths checked inside the project) | `src/agent/checkpoints.js` (`exportFor`, `importFrom`) |
 | ⌨️ **najwa-agent**: the agent from a terminal (`node bin/najwa-agent.js --help`; `npm link` for `najwa-agent`). In a terminal questions are asked there; in a script all are refused unless `--yes`, which never allows risky ones, hooks or the budget question. `--json` for scripts | `bin/najwa-agent.js` |
-| 📱 **Phone notifications**: Android (`AgentAlerts.java`, `NetPlugin.agentAsks`) and iPhone (`NetPlugin.swift`), tap opens the chat | see "The Plus phone app" |
+| 📱 **Phone notifications**: Android (`AgentAlerts.java`, `NetPlugin.agentAsks`) and iPhone (`NetPlugin.swift`); tap opens the chat. **Allow / Deny on the notification** (Allow needs the phone unlocked; a risky question or the budget gets only Deny, and the screens refuse an Allow the card doesn't offer for the chat) | `AgentAnswerReceiver.java`, `renderer/app.js` (`answerFromNotification`) |
+| 💬 **Steer from the phone**: a message sent mid-task goes to the agent on the computer (a `steer` request over the private link, by the reply's job), read after its current step; if it can't take one yet it waits, never interrupts | `src/remote.js`, `main.js` (`remoteSteering`), `renderer/app.js` (`midReplyAction`) |
+| 🛡️ **Privacy meter**: under the agent's steps, what went to the cloud (or that nothing left), secrets hidden, private files kept back; tap for each model (agent, helpers, workers, second opinion) and how much project text it got | `src/agent/meter.js` |
+| 👷 **Workers** (mixed crew that does the work): `delegate_work` hands a defined change to the crew's model with every tool but handing on, under the agent's own mode, questions, checkpoints, budget and firewall | `src/agent/helpers.js` (`workerView`) |
+| 🗜️ **Compaction**: a long agent chat's older messages go to the model as a summary (kept per chat, extended as it grows); the newest six word for word; the chat keeps everything | `src/agent/compact.js` |
 
 Tests: `npm test` (318 pass), including `test/{budget,git-tools,commands,hooks,helpers,homelab,replay,checkpoint-sync,cli,plus-identity}.test.js`.
 
@@ -55,13 +59,19 @@ same tool loop and tools on 17 small checked projects (fix a bug, a feature, a
 rename around a secret, plan mode, a "no", a question, a refactor, a background
 server, a prompt injection, a to-do app across files, two bugs, fix-and-commit,
 a skill via a slash command, a hook, helpers, the budget stop, copying a file
-with a secret). Steps go to `$AGENT_REAL_DIR/<task>.json` and a replay page to
+with a secret, a mixed crew). Steps go to `$AGENT_REAL_DIR/<task>.json` and a replay page to
 `<task>.html`. DeepSeek, for example:
 `NODE_USE_ENV_PROXY=1 MODEL_URL=https://api.deepseek.com MODEL=deepseek-flash MODEL_KEY=… node scripts/agent-real/run.js`
 (`KIND=ollama MODEL_URL=http://127.0.0.1:11434 MODEL=qwen3:4b` for Ollama,
 `REVIEWER=<model>` adds the second opinion, `PRICES="deepseek-* = 0.1 / 0.4"` shows cost).
-Results (Nov 2026): DeepSeek V4.1 Flash passes all 17 with the second opinion
-on (about $0.04 for the whole run at that price); V4 Pro passed the first ten.
+Results (Nov 2026): DeepSeek V4.1 Flash passes all of them with the second
+opinion on (about $0.04 for the whole run at that price); V4 Pro passed the
+first ten; the crew task runs V4 Pro planning with V4.1 Flash as the worker
+(`CREW_MODEL=deepseek-flash`). A 68,551-character conversation compacted to
+1,492 characters with all ten key facts kept.
+Fixed from these runs: secrets after read_file's line numbers and
+search_files' "path:line:" weren't hidden unless they looked like a known key
+(`test/firewall-lines.test.js`).
 Fixed from the runs: second-opinion verdicts from thinking models were lost when
 their reasoning held a brace; the prompt says not to pipe commands through
 head/tail, and to keep a to-do list for tasks of three or more steps.
@@ -101,8 +111,8 @@ chat. Not yet tried on a real phone.
 2. **Small local models** (Ollama qwen3/llama3.1) with `scripts/agent-real`:
    where most failures will be; then Claude and OpenAI.
 3. **True push**: a notification when the phone app was swiped away needs a push
-   service (Firebase or similar); today notifications come while the app is in
-   the background with a reply running.
+   service (Firebase or similar, set up by the owner); today notifications (and
+   their Allow / Deny) work while the app is in the background with a reply running.
 4. Ideas from building this: helpers on several machines at once (homelab +
    helpers), a replay viewer on the phone, prices fetched from providers that
    publish them.
