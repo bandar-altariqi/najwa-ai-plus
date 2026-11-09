@@ -9,6 +9,11 @@ on:
     branches: ['main']
   workflow_dispatch:
 
+# A newer push replaces a build still running.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   apk:
     runs-on: ubuntu-latest
