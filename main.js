@@ -330,6 +330,15 @@ async function rememberProject(root) {
   await storage.saveSettings({ ...settings, agent });
 }
 
+// "Always" for a project's hooks: their fingerprint (src/agent/hooks.js).
+async function trustHooks(hash) {
+  const settings = await storage.getSettings();
+  const agent = { ...(settings.agent || {}) };
+  if ((agent.trustedHooks || []).includes(hash)) return;
+  agent.trustedHooks = [...(agent.trustedHooks || []), hash].slice(-100);
+  await storage.saveSettings({ ...settings, agent });
+}
+
 async function rememberCommand(start) {
   const settings = await storage.getSettings();
   const agent = { ...(settings.agent || {}) };
@@ -362,7 +371,7 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     root,
     chatId: req.chatId,
     mode: spec.mode || a.defaultMode || 'ask',
-    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir] },
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}) },
     model: req.model || '',
     local: isLocalModel(providerId, cfg),
     firewall,

@@ -31,6 +31,7 @@ const { agentPrompt } = require('./instructions');
 const { createBudget } = require('./budget');
 const { gitTools, GIT_DEFS, GIT_READ_ONLY } = require('./git');
 const { listSkills, loadSkill } = require('./commands');
+const { createHooks, loadHooks } = require('./hooks');
 
 const MAX_READ_LINES = 2000;
 const MAX_READ_CHARS = 100000;
@@ -360,6 +361,9 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     }
   });
 
+  // The project's hooks (hooks.js): asked before they first run.
+  const hooks = createHooks({ root, approve, trusted: options.trustedHooks || [], onTrust: options.onTrustHooks || (() => {}), see: (t) => see(t) });
+
   // Skills (commands.js): the project's and the app's.
   const skills = listSkills(root, options.skillDirs || []);
 
@@ -564,8 +568,16 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     async run(name, args, signal) {
       const tool = tools[name];
       if (!tool) return { text: `There's no tool called ${name}.`, error: true };
+      const a = args || {};
       try {
-        return await tool(args || {}, signal);
+        const stop = await hooks.before(name, a, signal);
+        if (stop) return { text: stop, error: true, label: `${describe({ name, args: a })} (stopped by a hook)` };
+        const r = await tool(a, signal);
+        if (r && !r.error) {
+          const note = await hooks.after(name, a, signal);
+          if (note) return { ...r, text: `${r.text}\n\n${note}`, label: `${r.label || describe({ name, args: a })} · 🪝` };
+        }
+        return r;
       } catch (err) {
         if (signal && signal.aborted) throw err;
         return { text: `That didn't work: ${err.message || err}`, error: true };
@@ -574,7 +586,7 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
     close() {},
     // Budget guard (src/agent/budget.js): the task's tokens and cost, and its cap.
     budget: createBudget({ model, local, prices: options.prices || '', capUsd: Number(options.budgetUsd) || 0, capTokens: Number(options.budgetTokens) || 0, approve, onInfo }),
-    system: agentPrompt({ root, mode: perms.mode, firewall: firewall.active, dryRun: dryRunSetting !== 'off', reviewer: !!reviewer, skills }),
+    system: agentPrompt({ root, mode: perms.mode, firewall: firewall.active, dryRun: dryRunSetting !== 'off', reviewer: !!reviewer, skills, hooks: !!loadHooks(root) }),
     maxSteps: 150,
     contextBudget: 300000,
     hidden: () => hidden

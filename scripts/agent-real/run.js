@@ -268,6 +268,23 @@ const TASKS = {
       };
     }
   },
+  // Hooks: a "linter" after each write teaches a rule the model can't know.
+  hooks: {
+    files: {
+      '.najwa/hooks.json': JSON.stringify({ after: [{ tools: ['write_file', 'edit_file'], command: `${JSON.stringify(process.execPath)} -e "const t = require('fs').readFileSync(process.env.NAJWA_FILE, 'utf8'); const bad = [...t.matchAll(/(?<!\\*\\/\\n)^exports\\.(\\w+)/gm)].map((m) => m[1]); if (bad.length) { console.log('lint error: every export needs a /** JSDoc */ comment right above it: ' + bad.join(', ')); process.exit(1) }"` }] }, null, 2),
+      'util.js': '/** Twice n. */\nexports.twice = (n) => n * 2;\n'
+    },
+    ask: 'Add clamp(n, min, max) to util.js.',
+    mode: 'auto',
+    check: (root, log) => {
+      const u = read(root, 'util.js') || '';
+      return {
+        'asked to trust the hooks': log.cards.some((c) => /hooks/.test(c.title)),
+        'hook ran': log.calls.some((c) => c.name === 'edit_file' || c.name === 'write_file'),
+        'followed the hook': /\*\/\nexports\.clamp/.test(u)
+      };
+    }
+  },
   // The budget guard: a tiny token budget, and "Stop" at its question.
   'budget-stop': {
     files: {

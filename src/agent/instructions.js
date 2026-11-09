@@ -52,7 +52,7 @@ function platformName() {
  * The agent's part of the system prompt.
  * @param firewall  the privacy firewall is hiding secrets from this model
  */
-function agentPrompt({ root, mode, firewall, dryRun, reviewer, skills = [] }) {
+function agentPrompt({ root, mode, firewall, dryRun, reviewer, skills = [], hooks = false }) {
   const branch = gitBranch(root);
   const shell = process.platform === 'win32' ? 'cmd.exe (Windows)' : (process.env.SHELL || '/bin/sh');
   const lines = [
@@ -79,6 +79,7 @@ function agentPrompt({ root, mode, firewall, dryRun, reviewer, skills = [] }) {
   }
   if (dryRun) lines.push('Commands that change files may first be tried in a copy of the project, so the user can see the result before it\'s applied.');
   if (reviewer) lines.push('A second model reviews your changes and commands before the user sees them.');
+  if (hooks) lines.push('This project has hooks (.najwa/hooks.json): commands that run around your tools. One may stop a tool and say why, or add notes (like lint errors) to its result: follow them.');
   if (skills.length) {
     lines.push('', 'Skills you can load with use_skill when a task matches (the full instructions come with it):');
     for (const s of skills.slice(0, 40)) lines.push(`- ${s.name}: ${s.description}`);
