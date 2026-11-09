@@ -161,7 +161,7 @@ const ev=run.events,out=document.getElementById('out'),pos=document.getElementBy
 pos.max=ev.length;
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 const sec=(ms)=>(ms/1000).toFixed(1)+'s';
-function diff(text){const pre=el('pre');for(const l of String(text).split('\\n')){const s=el('span',/^\\+(?!\\+\\+ )/.test(l)?'add':/^-(?!-- )/.test(l)?'del':'',l||' ');pre.append(s)}return pre}
+function diff(text){const pre=el('pre');for(const l of String(text).split('\\n')){const c=/^\\+(?!\\+\\+ )/.test(l)?'add':/^-(?!-- )/.test(l)?'del':'';const s=el('span',c);if(/[\\u0590-\\u08FF]/.test(l)){s.append(l.slice(0,1),el('bdi','',l.slice(1)))}else s.textContent=l||' ';pre.append(s)}return pre}
 function card(e){
   if(e.kind==='tool'&&e.status==='completed'){const d=el('div','ev step');d.append(el('span','t',sec(e.t)),el('span','',(e.emoji?e.emoji+' ':'')+(e.label||'')));return d}
   if(e.kind==='approval'){const d=el('div','ev ask');d.append(el('span','t',sec(e.t)),el('b','','❓ '+(e.title||'A question')));if(e.command)d.append(diff(e.command));if(e.description)d.append(el('div','meta',e.description));return d}

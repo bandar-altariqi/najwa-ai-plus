@@ -1145,6 +1145,14 @@ async function undoAgentChange(chat) {
   }
 }
 
+// Najwa AI Plus, voice: with "Read replies aloud" on, the agent's questions and
+// the steps it finishes are said too, so a task can be followed without
+// looking (answer by voice or on the card).
+function agentSays(chat, text) {
+  if (!canSpeak() || !S.settings.readAloud || chat !== S.current || !text.trim()) return;
+  api.voice.speak({ text, lang: speechLang(text), rate: Number(S.settings.voiceRate) || 1 }).catch(() => {});
+}
+
 // ---- Run replay (Najwa AI Plus): the agent's runs as timelines -----------------
 
 async function openReplays(chat) {
@@ -1265,6 +1273,7 @@ function agentEvent(chat, msg, evt) {
     const origin = evt.origin && evt.origin.id ? { id: String(evt.origin.id), name: String(evt.origin.name || 'another device').slice(0, 60), computer: !!evt.origin.computer } : null;
     const askKind = ['edit', 'command', 'budget'].includes(evt.askKind) ? evt.askKind : null;
     msg.approvals.push({ runId: evt.runId, approvalId: evt.approvalId || null, generation: Number.isInteger(evt.generation) ? evt.generation : null, connectorId: evt.connectorId ? String(evt.connectorId) : null, origin, title: evt.title ? String(evt.title).slice(0, 200) : null, command: String(evt.command || '').slice(0, askKind ? 12000 : 2000), description: String(evt.description || '').slice(0, askKind ? 1500 : 500), choices: Array.isArray(evt.choices) && evt.choices.length ? evt.choices : ['once', 'deny'], askKind, state: 'pending' });
+    if (askKind) agentSays(chat, I18n.lang() === 'ar' ? `الوكيل يستأذنك: ${evt.title || ''}` : `The agent asks: ${evt.title || 'for your permission'}`);
     if (S.current !== chat || document.hidden) {
       toast(`${askKind ? 'The agent' : evt.title ? 'A connector' : 'Hermes'} is asking for permission. Open the chat to answer.`, 5000);
       // Najwa AI Plus on the phone: a notification too, so the question is
@@ -1282,7 +1291,9 @@ function agentEvent(chat, msg, evt) {
     const n = (v) => (v == null || !Number.isFinite(Number(v)) ? null : Number(v));
     msg.usage = { input: n(evt.input) || 0, output: n(evt.output) || 0, usd: n(evt.usd), capUsd: n(evt.capUsd), capTokens: n(evt.capTokens) };
   } else if (evt.kind === 'todo' && Array.isArray(evt.items)) {
-    // The agent's to-do list (Najwa AI Plus).
+    // The agent's to-do list (Najwa AI Plus); a step it finishes is read aloud.
+    const before = new Set((msg.todo || []).filter((i) => i.status === 'done').map((i) => i.text));
+    for (const i of evt.items) if (i && i.status === 'done' && !before.has(String(i.text || '').slice(0, 200))) agentSays(chat, `${I18n.lang() === 'ar' ? 'تم' : 'Done'}: ${String(i.text || '').slice(0, 200)}`);
     msg.todo = evt.items.slice(0, 30).map((i) => ({ text: String(i.text || '').slice(0, 200), status: ['pending', 'in_progress', 'done'].includes(i.status) ? i.status : 'pending' }));
   } else if (evt.kind === 'status') {
     msg.agentStatus = String(evt.text).slice(0, 200);
@@ -1350,7 +1361,10 @@ function approvalText(a) {
   const pre = h('pre', { class: 'approval-command diff', dir: 'ltr', translate: 'no' });
   for (const line of a.command.split('\n')) {
     const cls = /^\+(?!\+\+ )/.test(line) ? 'add' : /^-(?!-- )/.test(line) ? 'del' : /^@@/.test(line) ? 'hunk' : /^(\+\+\+|---) /.test(line) ? 'file' : '';
-    pre.append(h('span', { class: cls ? `diff-${cls}` : null, text: line || ' ' }));
+    // A line's text keeps its own direction (Arabic in code reads right to
+    // left) without moving the + or - at its start.
+    if ((cls === 'add' || cls === 'del' || !cls) && /[\u0590-\u08FF]/.test(line)) pre.append(h('span', { class: cls ? `diff-${cls}` : null }, line.slice(0, 1), h('bdi', { text: line.slice(1) })));
+    else pre.append(h('span', { class: cls ? `diff-${cls}` : null, text: line || ' ' }));
   }
   return pre;
 }
