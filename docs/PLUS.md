@@ -2,7 +2,8 @@
 
 Najwa AI Plus is Najwa AI (github.com/bandar9994/najwa-ai) with a full agent
 harness. Same author (Bandar Altariqi), same Najwa AI License. This repository
-(bandar-altariqi/najwa-ai-plus) is private.
+(bandar-altariqi/najwa-ai-plus) is public (since Nov 10, 2026: GitHub Actions is
+free for public repositories). Never commit keys or secrets: everything is visible.
 
 ## What's built (phase 1)
 
@@ -89,7 +90,7 @@ the Xcode project); the Java package stays `com.bandaraltariqi.najwa` because th
 native engine's JNI names use it. The **Android app (Plus)** workflow builds the
 APK on every push to main and attaches it to the run only (no release, no Play);
 a newer push replaces a build still running. The **iPhone app (Plus)** workflow
-is run by hand (macOS minutes count ten times on a private repository) and
+is run by hand and
 attaches an unsigned .ipa. Google sign-in (Drive sync) on the phone needs an
 Android OAuth client for `com.bandaraltariqi.najwa.plus` with the SHA-1 the
 Android workflow prints (Google Cloud, same project).

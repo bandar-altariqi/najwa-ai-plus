@@ -1,8 +1,8 @@
 name: Free Actions storage
 
 # Deletes the build files kept by earlier runs (desktop installers, APKs,
-# iPhone builds), keeping the newest Android APK. Run it by hand when GitHub
-# says the repository's Actions storage is full (500 MB on a private one).
+# iPhone builds), keeping the newest Android APK. Run it by hand to tidy up
+# (a private repository's Actions storage is only 500 MB).
 # Builds can always be made again; nothing else is touched.
 
 on:

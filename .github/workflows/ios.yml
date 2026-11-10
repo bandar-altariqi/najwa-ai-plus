@@ -4,8 +4,7 @@ name: iPhone app (Plus)
 # unsigned, and attaches it to the run. Nothing is published or sent to Apple
 # (Plus must never reach Najwa AI's store listings).
 #
-# Run it by hand (Actions → iPhone app (Plus) → Run workflow): macOS minutes
-# count ten times against a private repository's Actions allowance.
+# Run it by hand (Actions → iPhone app (Plus) → Run workflow).
 
 on:
   workflow_dispatch:
