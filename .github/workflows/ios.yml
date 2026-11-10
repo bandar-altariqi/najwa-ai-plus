@@ -54,5 +54,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: Najwa-AI-Plus-iOS-unsigned
+          retention-days: 7
           path: Najwa-AI-Plus-iOS-unsigned.ipa
           if-no-files-found: error

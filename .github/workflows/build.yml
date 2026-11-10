@@ -1,10 +1,12 @@
 name: Build installers
 
+# Desktop installers are big (about 240 MB each) and the Mac build's minutes
+# count ten times on a private repository: built when asked (Actions → Run
+# workflow) or for a version tag, not on every push. The Android workflow
+# runs the tests on every push.
 on:
   push:
-    branches: [main]
     tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -72,6 +74,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: balimda-desktop-${{ matrix.os }}
+          # Kept a day: they're also on the desktop-latest release, and
+          # Actions storage on a private repository is small (500 MB).
+          retention-days: 1
           path: |
             dist/*.exe
             dist/*.dmg

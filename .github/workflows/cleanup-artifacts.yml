@@ -1,0 +1,34 @@
+name: Free Actions storage
+
+# Deletes the build files kept by earlier runs (desktop installers, APKs,
+# iPhone builds), keeping the newest Android APK. Run it by hand when GitHub
+# says the repository's Actions storage is full (500 MB on a private one).
+# Builds can always be made again; nothing else is touched.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Delete old build files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPO/actions/artifacts?per_page=100" --paginate \
+            --jq '.artifacts[] | select(.expired == false) | "\(.id) \(.name) \(.size_in_bytes) \(.created_at)"' > all.txt
+          echo "Build files kept now: $(wc -l < all.txt)"
+          # The newest APK stays (the list is newest first).
+          keep=$(grep ' Najwa-AI-Plus-android-apk ' all.txt | head -1 | cut -d' ' -f1)
+          freed=0
+          while read -r id name size created; do
+            [ "$id" = "$keep" ] && continue
+            gh api -X DELETE "repos/$REPO/actions/artifacts/$id" && freed=$((freed + size))
+            echo "Deleted $name ($created)"
+          done < all.txt
+          echo "::notice title=Actions storage::Freed $((freed / 1048576)) MB; kept the newest APK ($keep)."
