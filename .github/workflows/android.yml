@@ -73,6 +73,8 @@ jobs:
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           SHA1=$("$APKSIGNER" verify --print-certs Najwa-AI-Plus-android.apk | grep -m1 'SHA-1 digest' | sed 's/.*: //' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
           echo "**Package** \`com.bandaraltariqi.najwa.plus\`, **SHA-1** \`$SHA1\` (for the Android OAuth client in Google Cloud)" >> "$GITHUB_STEP_SUMMARY"
+          # Also as a note at the top of the run's page, where it's easy to find.
+          echo "::notice title=Signing certificate SHA-1::$SHA1 (package com.bandaraltariqi.najwa.plus, for Google sign-in)"
       - uses: actions/upload-artifact@v7
         with:
           name: Najwa-AI-Plus-android-apk
