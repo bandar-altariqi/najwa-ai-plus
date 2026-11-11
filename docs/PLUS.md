@@ -88,10 +88,12 @@ IDs and that no workflow uploads to a store).
 (`capacitor.config.json`, `android/app/build.gradle` applicationId, strings.xml,
 the Xcode project); the Java package stays `com.bandaraltariqi.najwa` because the
 native engine's JNI names use it. The **Android app (Plus)** workflow builds the
-APK on every push to main and attaches it to the run only (no release, no Play);
-a newer push replaces a build still running. The **iPhone app (Plus)** workflow
-is run by hand and
-attaches an unsigned .ipa. Google sign-in (Drive sync) on the phone needs an
+APK on every push to main and publishes it to this repository's `android-latest`
+release (never Google Play); a newer push replaces a build still running. The
+**iPhone app (Plus)** workflow is run by hand and publishes an unsigned .ipa to
+`ios-latest`. **Build installers** (run by hand or for a `v*` tag) publishes the
+desktop installers to `desktop-latest`. All files are named `Najwa-AI-Plus-*`, and
+the README links to them. Google sign-in (Drive sync) on the phone needs an
 Android OAuth client for `com.bandaraltariqi.najwa.plus` with the SHA-1 the
 Android workflow prints (Google Cloud, same project).
 

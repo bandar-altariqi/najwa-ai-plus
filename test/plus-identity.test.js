@@ -48,3 +48,16 @@ test('the phone build finds what it changes in the page', () => {
     assert.ok(page.includes(m[1].replace(/\\n/g, '\n')), `renderer/index.html has no ${m[1]}`);
   }
 });
+
+test('the README links to Plus\'s own downloads, never Najwa AI\'s', () => {
+  const readme = read('README.md');
+  const downloads = [...readme.matchAll(/https:\/\/github\.com\/[^/\s)]+\/[^/\s)]+\/releases\/download\/[^\s)]+/g)].map((m) => m[0]);
+  assert.ok(downloads.length >= 6);
+  for (const url of downloads) {
+    assert.match(url, /^https:\/\/github\.com\/bandar-altariqi\/najwa-ai-plus\/releases\/download\//, url);
+    assert.match(url, /Najwa-AI-Plus-/, url);
+  }
+  // The workflows publish the files those links name.
+  const workflows = ['build.yml', 'android.yml', 'ios.yml'].map((f) => read(`.github/workflows/${f}`)).join('\n');
+  for (const url of downloads) assert.ok(workflows.includes(url.split('/').pop()), `no workflow publishes ${url.split('/').pop()}`);
+});

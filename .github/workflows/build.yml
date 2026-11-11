@@ -106,11 +106,11 @@ jobs:
           mkdir out
           for f in artifacts/*; do
             case "$f" in
-              *.exe) cp "$f" out/Najwa-AI-Windows-Setup.exe ;;
-              *arm64*.dmg) cp "$f" out/Najwa-AI-macOS-AppleSilicon.dmg ;;
-              *.dmg) cp "$f" out/Najwa-AI-macOS-Intel.dmg ;;
-              *.AppImage) cp "$f" out/Najwa-AI-Linux.AppImage ;;
-              *.deb) cp "$f" out/Najwa-AI-Linux.deb ;;
+              *.exe) cp "$f" out/Najwa-AI-Plus-Windows-Setup.exe ;;
+              *arm64*.dmg) cp "$f" out/Najwa-AI-Plus-macOS-AppleSilicon.dmg ;;
+              *.dmg) cp "$f" out/Najwa-AI-Plus-macOS-Intel.dmg ;;
+              *.AppImage) cp "$f" out/Najwa-AI-Plus-Linux.AppImage ;;
+              *.deb) cp "$f" out/Najwa-AI-Plus-Linux.deb ;;
             esac
           done
           ls -la out
@@ -120,13 +120,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           VERSION="1.0.${GITHUB_RUN_NUMBER}"
-          notes="Najwa AI ${VERSION} for desktop (from ${GITHUB_SHA::7}, $(date -u '+%Y-%m-%d %H:%M UTC')). Windows: Najwa-AI-Windows-Setup.exe. Mac: Najwa-AI-macOS-AppleSilicon.dmg (M1 and newer) or Najwa-AI-macOS-Intel.dmg. Linux: Najwa-AI-Linux.AppImage or Najwa-AI-Linux.deb."
+          notes="Najwa AI Plus ${VERSION} for desktop (from ${GITHUB_SHA::7}, $(date -u '+%Y-%m-%d %H:%M UTC')). Windows: Najwa-AI-Plus-Windows-Setup.exe. Mac: Najwa-AI-Plus-macOS-AppleSilicon.dmg (M1 and newer) or Najwa-AI-Plus-macOS-Intel.dmg. Linux: Najwa-AI-Plus-Linux.AppImage or Najwa-AI-Plus-Linux.deb. It installs beside Najwa AI."
           if ! gh release view desktop-latest >/dev/null 2>&1; then
-            gh release create desktop-latest --prerelease --target "$GITHUB_SHA" --title "Najwa AI for Windows, macOS and Linux (latest build)" --notes "$notes"
+            gh release create desktop-latest --prerelease --target "$GITHUB_SHA" --title "Najwa AI Plus for Windows, macOS and Linux (latest build)" --notes "$notes"
           fi
           gh release upload desktop-latest out/* --clobber
-          # Files from before the app was renamed (Balimda -> Najwa AI).
-          gh release view desktop-latest --json assets --jq '.assets[].name' | { grep -E '^Balimda-' || true; } | while read -r old; do
+          # Files under older names (Balimda, or Najwa AI's before Plus had its own).
+          gh release view desktop-latest --json assets --jq '.assets[].name' | { grep -E '^Balimda-|^Najwa-AI-(Windows|macOS|Linux)' || true; } | while read -r old; do
             gh release delete-asset desktop-latest "$old" --yes || true
           done
-          gh release edit desktop-latest --title "Najwa AI for Windows, macOS and Linux (latest build)" --notes "$notes"
+          gh release edit desktop-latest --title "Najwa AI Plus for Windows, macOS and Linux (latest build)" --notes "$notes"

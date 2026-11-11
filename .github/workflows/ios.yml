@@ -1,8 +1,8 @@
 name: iPhone app (Plus)
 
 # Builds the Najwa AI Plus iPhone app (com.bandaraltariqi.najwa.plus),
-# unsigned, and attaches it to the run. Nothing is published or sent to Apple
-# (Plus must never reach Najwa AI's store listings).
+# unsigned, and publishes it to this repository's ios-latest release. Nothing
+# is sent to Apple (Plus must never reach Najwa AI's store listings).
 #
 # Run it by hand (Actions → iPhone app (Plus) → Run workflow).
 
@@ -18,7 +18,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     permissions:
-      contents: read
+      contents: write  # the ios-latest release
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -56,3 +56,15 @@ jobs:
           retention-days: 7
           path: Najwa-AI-Plus-iOS-unsigned.ipa
           if-no-files-found: error
+      - name: Publish to the ios-latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          notes="Najwa AI Plus for iPhone (from ${GITHUB_SHA::7}, $(date -u '+%Y-%m-%d %H:%M UTC')), unsigned. Sign it for your iPhone with Sideloadly, AltStore or a signing service and your Apple ID. It installs beside Najwa AI."
+          if ! gh release view ios-latest >/dev/null 2>&1; then
+            gh release create ios-latest --prerelease --target "$GITHUB_SHA" --title "Najwa AI Plus for iPhone (latest build)" --notes "$notes"
+          fi
+          gh release upload ios-latest Najwa-AI-Plus-iOS-unsigned.ipa --clobber
+          gh release edit ios-latest --notes "$notes"
