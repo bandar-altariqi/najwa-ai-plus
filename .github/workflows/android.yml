@@ -42,7 +42,9 @@ jobs:
       - name: Use your own signing key
         if: env.BALIMDA_KEYSTORE_BASE64 != ''
         run: |
-          echo "$BALIMDA_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/balimda.keystore"
+          # Spaces or line breaks from copying and pasting are removed first
+          # (base64 text never contains them).
+          printf '%s' "$BALIMDA_KEYSTORE_BASE64" | tr -d ' \t\r\n' | base64 -d > "$RUNNER_TEMP/balimda.keystore"
           echo "BALIMDA_KEYSTORE_FILE=$RUNNER_TEMP/balimda.keystore" >> "$GITHUB_ENV"
       - name: Build APK
         working-directory: android
