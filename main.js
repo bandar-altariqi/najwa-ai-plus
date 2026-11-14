@@ -35,7 +35,7 @@ const { helperRunner, chooseHelper } = require('./src/agent/helpers');
 const { tailscaleMachines } = require('./src/agent/homelab');
 const { createRecorder, listRuns, loadRun, scrubRun, replayHtml } = require('./src/agent/replay');
 const { compactMessages, summaryStore, SUMMARY_SYSTEM } = require('./src/agent/compact');
-const { expandCommand, listCommands } = require('./src/agent/commands');
+const { expandCommand, listCommands, listSkills, addSkillsFromGitHub, removeSkill } = require('./src/agent/commands');
 const { createReviewer } = require('./src/agent/reviewer');
 const { backgroundJobs } = require('./src/agent/shell');
 const os = require('os');
@@ -917,6 +917,23 @@ function registerIpc() {
     });
   }));
   ipcMain.handle('agent:commands', (_e, root) => listCommands(path.resolve(String(root || '')), [agentDir]).map(({ name, description }) => ({ name, description })));
+  // Skills: the app's own (for every project), and those installed for other
+  // agents on this computer (Claude Code's plugins, ~/.claude/skills, ~/.agents/skills).
+  ipcMain.handle('agent:skills', () => {
+    const own = path.join(agentDir, 'skills');
+    const builtIn = path.join(__dirname, 'skills');
+    return listSkills(path.join(agentDir, 'no-project'), [agentDir, __dirname]).map(({ name, description, dir }) => ({
+      name, description, own: path.dirname(dir) === own, builtIn: path.dirname(dir) === builtIn,
+      where: dir.startsWith(os.homedir()) ? `~${dir.slice(os.homedir().length)}` : dir
+    }));
+  });
+  ipcMain.handle('agent:addSkills', (_e, repo) => addSkillsFromGitHub(String(repo || ''), agentDir));
+  ipcMain.handle('agent:removeSkill', (_e, name) => removeSkill(agentDir, String(name || '')));
+  ipcMain.handle('agent:openSkills', async () => {
+    const dir = path.join(agentDir, 'skills');
+    fs.mkdirSync(dir, { recursive: true });
+    return shell.openPath(dir);
+  });
   ipcMain.handle('agent:checkpoints', (_e, chatId) => checkpoints.list(String(chatId)));
   ipcMain.handle('agent:undo', (_e, chatId, id) => checkpoints.undo(String(chatId), id || null));
   // Undo history that travels with the chat (synced, encrypted on the device).

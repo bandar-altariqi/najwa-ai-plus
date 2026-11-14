@@ -868,3 +868,11 @@ p.mono { font-family: inherit; font-size: 13px; word-break: normal; overflow-wra
 /* A provider's price fields (Najwa AI Plus). */
 .price-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .price-row .input { flex: 1 1 90px; min-width: 90px; }
+
+/* Settings → Agent → Skills */
+.skill-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; max-height: 320px; overflow: auto; }
+.skill-item { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.skill-text { min-width: 0; }
+.skill-text .help { margin: 2px 0 0; }
+.skill-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.skill-where { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11.5px; overflow-wrap: anywhere; }

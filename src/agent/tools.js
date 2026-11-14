@@ -395,7 +395,8 @@ function agentTools({ root, chatId, mode = 'ask', options = {}, model = '', loca
   const hooks = createHooks({ root, approve, trusted: options.trustedHooks || [], onTrust: options.onTrustHooks || (() => {}), see: (t) => see(t) });
 
   // Skills (commands.js): the project's and the app's.
-  const skills = listSkills(root, options.skillDirs || []);
+  // (and other agents' on this computer: Claude Code's plugins, ~/.claude, ~/.agents).
+  const skills = listSkills(root, options.skillDirs || [], options.sharedSkillDirs);
   // Modern Web Guidance's guides, when that skill is here (web-guide.js).
   const guideSkill = skills.find((s) => s.name.toLowerCase() === 'modern-web-guidance');
   const guides = guideSkill ? webGuides(guideSkill.dir) : null;

@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "modern-web-guidance@googlechrome": true
+  },
+  "extraKnownMarketplaces": {
+    "googlechrome": {
+      "source": {
+        "source": "github",
+        "repo": "GoogleChrome/modern-web-guidance"
+      }
+    }
+  }
+}

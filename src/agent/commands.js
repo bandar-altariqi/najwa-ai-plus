@@ -15,7 +15,9 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { execFile } = require('child_process');
 
 const MAX_FILE = 60000;
 const NAME = /^[a-z0-9][a-z0-9_-]{0,47}$/i;
@@ -46,17 +48,52 @@ function frontMatter(text) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
   if (!m) return { meta: {}, body: text };
   const meta = {};
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = /^([A-Za-z_-]+)\s*:\s*(.*)$/.exec(line);
-    if (kv) meta[kv[1].toLowerCase()] = kv[2].trim().replace(/^["']|["']$/g, '');
+  const lines = m[1].split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const kv = /^([A-Za-z_-]+)\s*:\s*(.*)$/.exec(lines[i]);
+    if (!kv) continue;
+    let value = kv[2].trim();
+    // A YAML block ("description: |" or ">", then indented lines), or a plain
+    // value carried on to indented lines: one line of text.
+    const block = /^[|>][+-]?$/.test(value);
+    if (block) value = '';
+    const more = [];
+    while (i + 1 < lines.length && (/^\s+\S/.test(lines[i + 1]) || (block && !lines[i + 1].trim()))) more.push(lines[++i].trim());
+    if (more.length) value = [value, ...more].filter(Boolean).join(' ');
+    meta[kv[1].toLowerCase()] = value.replace(/^["']|["']$/g, '');
   }
   return { meta, body: text.slice(m[0].length) };
 }
 
 const firstLine = (body) => (body.split('\n').map((l) => l.replace(/^#+\s*/, '').trim()).find(Boolean) || '').slice(0, 120);
 
-// Where to look, most specific first: the project's .najwa, its .claude, then the app's.
-const dirsFor = (root, kind, extra = []) => [path.join(root, '.najwa', kind), path.join(root, '.claude', kind), ...extra.map((d) => path.join(d, kind))];
+// Where to look, most specific first: the project's .najwa, its .claude (and
+// for skills its .agents), then the app's.
+const dirsFor = (root, kind, extra = []) => [path.join(root, '.najwa', kind), path.join(root, '.claude', kind),
+  ...(kind === 'skills' ? [path.join(root, '.agents', 'skills')] : []), ...extra.map((d) => path.join(d, kind))];
+
+// Skills installed for other agents on this computer, so they work here too:
+// ~/.claude/skills and ~/.agents/skills (where `npx skills add` puts them),
+// and the skills inside Claude Code's plugins (the newest version of each).
+function sharedSkillDirs(home = os.homedir()) {
+  const dirs = [path.join(home, '.claude', 'skills'), path.join(home, '.agents', 'skills')];
+  const cache = path.join(home, '.claude', 'plugins', 'cache');
+  const subdirs = (d) => {
+    try {
+      return fs.readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    } catch {
+      return [];
+    }
+  };
+  const newest = (names) => names.slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).pop();
+  for (const market of subdirs(cache)) {
+    for (const plugin of subdirs(path.join(cache, market))) {
+      const version = newest(subdirs(path.join(cache, market, plugin)));
+      if (version) dirs.push(path.join(cache, market, plugin, version, 'skills'));
+    }
+  }
+  return dirs;
+}
 
 /** [{ name, description, where }] (built-in ones last, unless replaced). */
 function listCommands(root, extra = []) {
@@ -99,9 +136,10 @@ function expandCommand(root, message, extra = []) {
 }
 
 /** [{ name, description, dir, file }] */
-function listSkills(root, extra = []) {
+function listSkills(root, extra = [], shared) {
+  if (!Array.isArray(shared)) shared = sharedSkillDirs();
   const seen = new Map();
-  for (const dir of dirsFor(root, 'skills', extra)) {
+  for (const dir of [...dirsFor(root, 'skills', extra), ...shared]) {
     let entries = [];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory());
@@ -115,7 +153,8 @@ function listSkills(root, extra = []) {
       const { meta, body } = frontMatter(text);
       const name = (meta.name && NAME.test(meta.name) ? meta.name : e.name);
       if (!NAME.test(name) || seen.has(name.toLowerCase())) continue;
-      seen.set(name.toLowerCase(), { name, description: (meta.description || firstLine(body)).slice(0, 300), dir: path.join(dir, e.name), file });
+      // (Up to 1024 characters, as other agents allow: it's what tells the agent when to use it.)
+      seen.set(name.toLowerCase(), { name, description: (meta.description || firstLine(body)).slice(0, 1024), dir: path.join(dir, e.name), file });
     }
   }
   return [...seen.values()];
@@ -142,4 +181,68 @@ function loadSkill(skills, name, root) {
   };
 }
 
-module.exports = { listCommands, expandCommand, listSkills, loadSkill, frontMatter, BUILT_IN };
+// Skills from a GitHub repository ("owner/repo", or its address): every
+// folder in it with a SKILL.md is copied into `dest` (the app's own skills, for
+// every project). Uses the computer's git. Returns the skills' names.
+const REPO = /^(?:https:\/\/github\.com\/)?([A-Za-z0-9][\w.-]*)\/([\w.-]+?)(?:\.git)?\/?$/;
+function findSkillDirs(dir, depth = 0, out = []) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  if (entries.some((e) => e.isFile() && e.name === 'SKILL.md')) {
+    out.push(dir);
+    return out;
+  }
+  if (depth >= 5) return out;
+  for (const e of entries) {
+    if (e.isDirectory() && !e.name.startsWith('.git') && e.name !== 'node_modules') findSkillDirs(path.join(dir, e.name), depth + 1, out);
+  }
+  return out;
+}
+
+function addSkillsFromGitHub(repo, dest, { git = 'git', timeoutMs = 120000, url = null } = {}) {
+  const m = REPO.exec(String(repo || '').trim());
+  if (!m) return Promise.reject(new Error('Write the repository as owner/name, e.g. GoogleChrome/modern-web-guidance.'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'najwa-skills-'));
+  return new Promise((resolve, reject) => {
+    execFile(git, ['clone', '--depth', '1', url || `https://github.com/${m[1]}/${m[2]}.git`, tmp], { timeout: timeoutMs, windowsHide: true }, (err) => {
+      try {
+        if (err) {
+          reject(new Error(err.code === 'ENOENT' ? 'Adding skills needs Git on this computer (git-scm.com).' : `Couldn't download ${m[1]}/${m[2]}. Check the name and that it's public.`));
+          return;
+        }
+        const added = [];
+        for (const dir of findSkillDirs(tmp)) {
+          const { meta } = frontMatter(read(path.join(dir, 'SKILL.md')) || '');
+          const name = meta.name && NAME.test(meta.name) ? meta.name : path.basename(dir);
+          if (!NAME.test(name)) continue;
+          const to = path.join(dest, 'skills', name);
+          fs.rmSync(to, { recursive: true, force: true });
+          fs.mkdirSync(path.dirname(to), { recursive: true });
+          fs.cpSync(dir, to, { recursive: true, filter: (src) => !/(^|[\\/])\.git([\\/]|$)/.test(path.relative(dir, src)) });
+          added.push(name);
+        }
+        if (!added.length) reject(new Error(`${m[1]}/${m[2]} has no skills (no SKILL.md files).`));
+        else resolve(added);
+      } catch (e) {
+        reject(e);
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+  });
+}
+
+// A skill the user added to the app: removed.
+function removeSkill(dest, name) {
+  if (!NAME.test(String(name || ''))) return false;
+  const dir = path.join(dest, 'skills', name);
+  if (!fs.existsSync(path.join(dir, 'SKILL.md'))) return false;
+  fs.rmSync(dir, { recursive: true, force: true });
+  return true;
+}
+
+module.exports = { listCommands, expandCommand, listSkills, loadSkill, frontMatter, sharedSkillDirs, addSkillsFromGitHub, removeSkill, BUILT_IN };

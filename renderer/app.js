@@ -3672,6 +3672,62 @@ function openSettings(tab = 'general') {
   const check = (label, obj, key) =>
     h('label', { class: 'check' }, bind(h('input', { type: 'checkbox', checked: obj[key] }), obj, key), label);
 
+  // Settings → Agent → Skills: the ones found, adding from GitHub, removing the app's own.
+  const skillsBox = () => {
+    const list = h('div', { class: 'skill-list' }, h('p', { class: 'help', text: 'Looking for skills…' }));
+    const repo = h('input', { class: 'input', dir: 'ltr', placeholder: 'owner/name, e.g. GoogleChrome/modern-web-guidance' });
+    const refresh = async () => {
+      let skills = [];
+      try {
+        skills = await api.agent.skills();
+      } catch (err) {
+        list.replaceChildren(h('p', { class: 'help', text: `Couldn't list the skills: ${errorText(err)}` }));
+        return;
+      }
+      list.replaceChildren(...(skills.length ? skills.map((k) => h('div', { class: 'skill-item' },
+        h('div', { class: 'skill-text' },
+          h('strong', { translate: 'no', text: k.name }),
+          h('div', { class: 'help skill-desc', dir: 'auto', title: k.description, text: k.description }),
+          h('div', { class: 'help skill-where', dir: 'ltr', translate: 'no', text: k.own ? 'Added to Najwa AI Plus' : k.builtIn ? 'Comes with Najwa AI Plus' : k.where })),
+        k.own ? h('button', {
+          class: 'btn danger',
+          text: 'Remove',
+          onclick: async () => {
+            if (!(await confirmBox(`Remove the skill "${k.name}"?`, 'Remove'))) return;
+            await api.agent.removeSkill(k.name);
+            refresh();
+          }
+        }) : null)) : [h('p', { class: 'help', text: 'No skills yet. Add some from GitHub below.' })]));
+    };
+    const add = h('button', {
+      class: 'btn primary',
+      text: 'Add from GitHub',
+      onclick: async () => {
+        if (!repo.value.trim()) {
+          repo.focus();
+          return;
+        }
+        add.disabled = true;
+        add.textContent = 'Adding…';
+        try {
+          const names = await api.agent.addSkills(repo.value.trim());
+          toast(`Added ${names.length} skill${names.length === 1 ? '' : 's'}: ${names.join(', ')}`, 5000);
+          repo.value = '';
+          refresh();
+        } catch (err) {
+          toast(errorText(err), 6000);
+        } finally {
+          add.disabled = false;
+          add.textContent = 'Add from GitHub';
+        }
+      }
+    });
+    refresh();
+    return h('div', {}, list,
+      h('div', { class: 'field-row' }, repo, add),
+      h('div', { class: 'field-row' }, h('button', { class: 'btn', text: 'Open the skills folder', onclick: () => api.agent.openSkills() })));
+  };
+
   const views = {
     // Najwa AI Plus: how the agent works in project folders (this computer only).
     agent() {
@@ -3738,6 +3794,7 @@ function openSettings(tab = 'general') {
           h('div', { class: 'help', text: 'Cloud models see «secret-1» instead of the secret, and can still keep it where it is. Models on this computer or your network (Ollama, LM Studio, Tailscale) see everything.' })),
         field('Private files (only models on your computer or network can read them)', privateFiles, 'One pattern a line, e.g. backups/** or *.sqlite. Keys and certificates (*.pem, *.key, id_rsa, .ssh/) and secrets/ are always private.'),
         field('Commands always allowed', rules, 'One a line: commands starting like this run without asking (in every mode but Plan only). "Always allow" on a card adds one here.'),
+        api.agent && api.agent.skills ? field('Skills', skillsBox(), 'Know-how the agent loads when a task needs it (a folder with a SKILL.md). It sees each skill\'s name and description, and reads the rest when it uses one. Skills installed for Claude Code and other agents on this computer work here too, and so do a project\'s own (.najwa/skills, .claude/skills, .agents/skills). Only add skills you trust: the agent follows them, though its commands are still asked as usual.') : null,
         field('Machines (homelab)', h('div', {}, machines, api.agent && api.agent.tailscale ? findTailscale : null), 'The agent can work on these over SSH (your keys; it never types a password), one a line: name = user@host : look, ask or auto. look: only commands that look (docker ps, df, logs). ask: changes are asked. auto: changes run, risky ones (deleting containers or data, reboots) are still asked.'),
         field('Budget per task, in dollars', budgetUsd, 'When a task reaches it, the agent stops and asks before spending more. Needs the provider\'s prices (Models & providers).'),
         field('Budget per task, in tokens', budgetTokens, 'The same, counted in tokens (works without prices, for any model).'),

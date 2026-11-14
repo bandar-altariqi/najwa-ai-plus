@@ -86,7 +86,7 @@ test('the agent gets web_guide when the skill is there, read-only', async () => 
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'najwa-wg-')));
   fs.writeFileSync(path.join(root, 'index.html'), '<p>hi</p>\n');
   const make = (dirs) => agentTools({
-    root, chatId: 'w', mode: 'ask', options: { dryRun: 'off', skillDirs: dirs }, firewall: createFirewall({ cloud: true }),
+    root, chatId: 'w', mode: 'ask', options: { dryRun: 'off', skillDirs: dirs, sharedSkillDirs: [] }, firewall: createFirewall({ cloud: true }),
     approve: async () => { throw new Error('a read-only tool must not ask'); }, chatAllowed: new Set(),
     checkpoints: createCheckpoints(path.join(root, '..', `${path.basename(root)}-cps`)), jobs: backgroundJobs()
   });
