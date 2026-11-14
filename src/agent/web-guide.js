@@ -139,7 +139,8 @@ function webGuides(skillDir) {
     const want = String(id || '').trim().replace(/\.md$/i, '').toLowerCase();
     const g = index.find((x) => x.id.toLowerCase() === want || `${x.area}/${x.id}`.toLowerCase() === want);
     if (!g) return null;
-    let text = fs.readFileSync(g.file, 'utf8');
+    // The guides point to each other with the original's command; here that's web_guide.
+    let text = fs.readFileSync(g.file, 'utf8').replace(/\(via `npx -y modern-web-guidance@latest retrieve "([^"]+)"`\)/g, '(web_guide read "$1")');
     if (text.length > MAX_READ) text = `${text.slice(0, MAX_READ)}\n\n[… the rest of this guide is left out]`;
     return { id: g.id, area: g.area, title: g.title, text };
   }

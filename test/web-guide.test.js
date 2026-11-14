@@ -55,6 +55,10 @@ test('the guides: search finds the right one, read returns it', () => {
 
   const d = g.read('navigation-drawer');
   assert.match(d.text, /^# Navigation Drawer/);
+  // Links to other guides say how to read them here, not with npx.
+  const dialog = g.read('dialog').text;
+  assert.match(dialog, /\(web_guide read "declarative-dialog-popover-control"\)/);
+  assert.doesNotMatch(dialog, /npx/);
   assert.strictEqual(g.read('ui-components/navigation-drawer.md').id, 'navigation-drawer');
   assert.strictEqual(g.read('nope'), null);
   // No guides folder: nothing to offer.
