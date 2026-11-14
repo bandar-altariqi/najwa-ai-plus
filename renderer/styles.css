@@ -342,6 +342,8 @@ details.thinking summary { cursor: pointer; }
   background: transparent;
   color: var(--text);
   font: inherit;
+  /* Grows with its text up to 240px (older browsers: app.js autoGrow). */
+  field-sizing: content;
   max-height: 240px;
   padding: 6px 0;
 }
@@ -459,39 +461,65 @@ textarea.input { resize: vertical; }
   display: grid;
 }
 .menu button { border: 0; background: transparent; text-align: start; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
-.menu button:hover { background: var(--bg-hover); }
+.menu button:hover, .menu button:focus-visible { background: var(--bg-hover); }
+/* As a popover (app.js: chatMenu) it's in the top layer, placed under its
+   button: CSS anchor positioning, or by app.js where that's missing. */
+.menu[popover] { position: fixed; inset: auto; margin: 0; color: var(--text); }
+.menu[popover]:not(:popover-open) { display: none; }
+@supports (position-area: block-end) {
+  #chatMenuBtn { anchor-name: --chat-menu; }
+  #chatMenu[popover] {
+    position-anchor: --chat-menu;
+    position-area: block-end span-inline-start;
+    position-try-fallbacks: flip-block;
+    margin-block-start: 4px;
+  }
+}
 .menu .danger { color: var(--danger); }
 
 /* ---------- modal ---------- */
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  place-items: center;
-  z-index: 50;
-  /* Clear of the phone's own bars (status bar, Android's navigation buttons),
-     which the app draws under. */
-  padding:
-    max(16px, var(--safe-area-inset-top, env(safe-area-inset-top)))
-    max(16px, var(--safe-area-inset-right, env(safe-area-inset-right)))
-    max(16px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom)))
-    max(16px, var(--safe-area-inset-left, env(safe-area-inset-left)));
-}
+/* A native <dialog> opened with showModal() (app.js: openModal), centred in
+   the top layer, clear of the phone's own bars (status bar, Android's
+   navigation buttons), which the app draws under. */
 .modal {
+  --modal-gap-x: calc(max(16px, var(--safe-area-inset-left, env(safe-area-inset-left))) + max(16px, var(--safe-area-inset-right, env(safe-area-inset-right))));
+  --modal-gap-y: calc(max(16px, var(--safe-area-inset-top, env(safe-area-inset-top))) + max(16px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom))));
   background: var(--bg-elev);
+  color: var(--text);
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: var(--shadow);
-  width: min(560px, 100%);
+  padding: 0;
+  width: min(560px, calc(100vw - var(--modal-gap-x)));
+  max-width: none;
   min-width: 0;
-  max-height: 88vh;
-  display: flex;
+  max-height: min(88vh, calc(100dvh - var(--modal-gap-y)));
+  overflow: hidden;
   flex-direction: column;
 }
-.modal.wide { width: min(820px, 100%); height: min(640px, 88vh); }
+.modal[open] { display: flex; }
+.modal.wide { width: min(820px, calc(100vw - var(--modal-gap-x))); height: min(640px, 88vh, calc(100dvh - var(--modal-gap-y))); }
+.modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  /* Scrolling over the backdrop or in the window never scrolls the page behind
+     (Modern Web Guidance: prevent-page-scroll-under-modal-dialog). */
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.modal:modal { overscroll-behavior: contain; }
+/* iOS 15.0-15.3 have no showModal(): a fixed window over a dimmed page. */
+.modal.modal-fallback { position: fixed; inset: 0; margin: auto; z-index: 50; box-shadow: var(--shadow), 0 0 0 100vmax rgba(0, 0, 0, 0.4); }
+/* Editing a sent message: the box grows with its text (field-sizing). */
+textarea.grow { field-sizing: content; min-height: 6em; max-height: 400px; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .modal-head h3 { margin: 0; font-size: 16px; }
 .modal-body { padding: 16px 18px; overflow-y: auto; flex: 1; }
@@ -521,6 +549,11 @@ textarea.input { resize: vertical; }
 
 #toast {
   position: fixed;
+  /* Also a popover (top layer): no browser popover box. */
+  top: auto;
+  right: auto;
+  margin: 0;
+  border: 0;
   bottom: calc(90px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
   left: 50%;
   transform: translateX(-50%);
@@ -640,13 +673,15 @@ textarea.input { resize: vertical; }
 
   /* A sheet from the bottom of the screen: its buttons stay above Android's
      navigation buttons (the sheet's background goes on underneath them). */
-  .modal-backdrop {
-    padding: var(--safe-area-inset-top, env(safe-area-inset-top)) var(--safe-area-inset-right, env(safe-area-inset-right))
-      0 var(--safe-area-inset-left, env(safe-area-inset-left));
-    align-items: end;
+  .modal, .modal.wide {
+    width: calc(100vw - var(--safe-area-inset-left, env(safe-area-inset-left)) - var(--safe-area-inset-right, env(safe-area-inset-right)));
+    margin: auto auto 0;
+    max-height: min(92dvh, calc(100dvh - var(--safe-area-inset-top, env(safe-area-inset-top))));
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+    padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom));
   }
-  .modal, .modal.wide { width: 100%; max-height: 92dvh; border-radius: 16px 16px 0 0; padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom)); }
-  .modal.wide { height: 92dvh; }
+  .modal.wide { height: min(92dvh, calc(100dvh - var(--safe-area-inset-top, env(safe-area-inset-top)))); }
   .settings { flex-direction: column; }
   .settings-tabs {
     width: auto;

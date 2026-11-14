@@ -109,13 +109,120 @@ function debounce(fn, ms) {
   };
 }
 
+// Screen readers hear short messages from one polite live region (Modern Web
+// Guidance: accessibility). While a window is open the rest of the page is
+// inert, so the window gets its own.
+function announce(text) {
+  const host = el.modalRoot.lastElementChild;
+  let region = host ? host.querySelector(':scope > .announcer') : document.getElementById('announcer');
+  if (!region) {
+    region = h('div', { class: 'announcer visually-hidden', role: 'status' });
+    host.append(region);
+  }
+  region.textContent = '';
+  setTimeout(() => { region.textContent = text; }, 100);
+}
+
+// The toast is a popover, so it shows on top of everything, windows included
+// (the top layer). Older iPhones without popover show it the old way.
+if (typeof el.toast.showPopover === 'function') {
+  el.toast.hidden = false;
+  el.toast.popover = 'manual';
+}
+const toastOpen = () => (el.toast.popover ? el.toast.matches(':popover-open') : !el.toast.hidden);
+function hideToast() {
+  if (!toastOpen()) return;
+  if (el.toast.popover) el.toast.hidePopover();
+  else el.toast.hidden = true;
+}
 let toastTimer;
 function toast(msg, ms = 2600) {
   el.toast.textContent = msg;
-  el.toast.hidden = false;
+  announce(msg);
+  hideToast();   // shown again, so it's above a window opened since
+  if (el.toast.popover) el.toast.showPopover();
+  else el.toast.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.toast.hidden = true; }, ms);
+  toastTimer = setTimeout(hideToast, ms);
 }
+
+// The ⋯ chat menu (Modern Web Guidance: menu): a popover the browser opens and
+// closes (Esc, a press outside, the button again), under its button (CSS anchor
+// positioning, or placed here where that's missing). Arrow keys, Home and End
+// move through it. Older iPhones without popover show and hide it by hand.
+const chatMenu = (() => {
+  const menu = el.chatMenu;
+  const btn = $('#chatMenuBtn');
+  const popover = typeof menu.showPopover === 'function';
+  const items = () => [...menu.querySelectorAll('button')].filter((b) => !b.hidden);
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-labelledby', 'chatMenuBtn');
+  for (const b of menu.querySelectorAll('button')) {
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.tabIndex = -1;
+  }
+  btn.setAttribute('aria-haspopup', 'menu');
+  btn.setAttribute('aria-expanded', 'false');
+  const place = () => {
+    const r = btn.getBoundingClientRect();
+    menu.style.top = `${Math.round(r.bottom + 4)}px`;
+    if (getComputedStyle(btn).direction === 'rtl') {
+      menu.style.left = `${Math.round(r.left)}px`;
+      menu.style.right = 'auto';
+    } else {
+      menu.style.right = `${Math.round(document.documentElement.clientWidth - r.right)}px`;
+      menu.style.left = 'auto';
+    }
+  };
+  const isOpen = () => (popover ? menu.matches(':popover-open') : !menu.hidden);
+  const close = () => {
+    if (!isOpen()) return;
+    if (popover) menu.hidePopover();   // focus goes back to the button
+    else menu.hidden = true;
+  };
+  const opened = () => {
+    btn.setAttribute('aria-expanded', 'true');
+    (items()[0] || menu).focus();
+  };
+  if (popover) {
+    menu.hidden = false;
+    menu.popover = 'auto';
+    btn.popoverTargetElement = menu;
+    menu.addEventListener('toggle', (e) => {
+      if (e.newState !== 'open') {
+        btn.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      if (!CSS.supports('position-area', 'block-end')) place();
+      opened();
+    });
+  } else {
+    new MutationObserver(() => {
+      if (menu.hidden) btn.setAttribute('aria-expanded', 'false');
+      else opened();
+    }).observe(menu, { attributes: true, attributeFilter: ['hidden'] });
+  }
+  menu.addEventListener('keydown', (e) => {
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    let next = null;
+    if (e.key === 'ArrowDown') next = list[(i + 1) % list.length];
+    else if (e.key === 'ArrowUp') next = list[(i - 1 + list.length) % list.length];
+    else if (e.key === 'Home') next = list[0];
+    else if (e.key === 'End') next = list[list.length - 1];
+    else if (e.key === 'Tab') close();   // Tab leaves the menu
+    else if (e.key === 'Escape' && !popover) {
+      close();
+      btn.focus();
+    }
+    if (next) {
+      e.preventDefault();
+      next.focus();
+    }
+  });
+  return { popover, isOpen, close };
+})();
 
 function modelKey(m) {
   return m && m.provider && m.model ? `${m.provider}::${m.model}` : '';
@@ -255,33 +362,30 @@ const canStopElsewhere = (msg) => !!msg && typeof api.ai.stopElsewhere === 'func
 // modal helpers
 
 let modalSeq = 0;
-const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
+// Every window is a native <dialog> opened with showModal(): the browser makes
+// the rest of the page inert, keeps focus inside, puts it on top of everything
+// (the top layer), and closes it on Esc and the back gesture. Windows can stack.
 // `dir` and `closeLabel` are for a dialog in another language (Arabic: 'rtl').
 function openModal({ title, body, buttons = [], wide = false, onClose, dir, closeLabel = 'Close' }) {
-  const opener = document.activeElement;
-  const close = () => {
-    backdrop.remove();
-    document.removeEventListener('keydown', onKey, true);
-    // Back to the button that opened it (not to a text box: that would raise the keyboard).
+  let opener = document.activeElement;
+  // Focus goes back to the button that opened it, never to a text box (that
+  // would raise the phone's keyboard): a text box loses focus first.
+  if (opener && /^(INPUT|TEXTAREA|SELECT)$/.test(opener.tagName)) {
+    opener.blur();
+    opener = null;
+  }
+  let closed = false;
+  const finish = () => {
+    if (closed) return;
+    closed = true;
+    modal.remove();
     if (opener && opener.isConnected && /^(BUTTON|A)$/.test(opener.tagName)) opener.focus();
     if (onClose) onClose();
   };
-  const onKey = (e) => {
-    if (el.modalRoot.lastElementChild !== backdrop) return;
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      close();
-    } else if (e.key === 'Tab') {
-      // Keep Tab inside the dialog.
-      const items = [...modal.querySelectorAll(FOCUSABLE)].filter((n) => !n.disabled && !n.hidden && n.offsetParent !== null);
-      if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!modal.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
-      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    }
+  const close = () => {
+    if (modal.open && typeof modal.close === 'function') modal.close();   // 'close' runs finish
+    else finish();
   };
   const titleId = `modal-title-${++modalSeq}`;
   const foot = buttons.length
@@ -295,15 +399,26 @@ function openModal({ title, body, buttons = [], wide = false, onClose, dir, clos
         }
       })))
     : null;
-  const modal = h('div', { class: `modal ${wide ? 'wide' : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': titleId, dir },
+  const modal = h('dialog', { class: `modal ${wide ? 'wide' : ''}`, 'aria-labelledby': titleId, dir },
     h('div', { class: 'modal-head' },
       h('h3', { id: titleId, text: title }),
       h('button', { class: 'icon-btn', title: closeLabel, 'aria-label': closeLabel, text: '✕', onclick: close })),
     h('div', { class: 'modal-body' }, body),
     foot);
-  const backdrop = h('div', { class: 'modal-backdrop', onmousedown: (e) => { if (e.target === backdrop) close(); } }, modal);
-  el.modalRoot.append(backdrop);
-  document.addEventListener('keydown', onKey, true);
+  modal.addEventListener('close', finish);
+  // A press on the dimmed page around it closes it (the dialog has no padding:
+  // a press on the dialog element itself outside its box is on the backdrop).
+  modal.addEventListener('mousedown', (e) => {
+    if (e.target !== modal) return;
+    const r = modal.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) close();
+  });
+  el.modalRoot.append(modal);
+  if (typeof modal.showModal === 'function') modal.showModal();
+  else {
+    modal.setAttribute('open', '');   // iOS 15.0-15.3: no showModal()
+    modal.classList.add('modal-fallback');
+  }
   const first = modal.querySelector('input, textarea, select');
   if (first) setTimeout(() => first.focus(), 0);
   else setTimeout(() => { if (!modal.contains(document.activeElement)) (modal.querySelector('.modal-foot .btn') || modal).focus(); }, 0);
@@ -1678,6 +1793,9 @@ function updateSendButton() {
   el.busyDot.hidden = !(there && !canStop);
   if (there) el.busyDot.title = replyLabel(there);
   el.composerBox.classList.toggle('busy', busy);
+  // The chat is a live region: while a reply streams in, screen readers wait
+  // and read it when it's done, not every few words (Modern Web Guidance: accessibility).
+  el.messages.setAttribute('aria-busy', String(busy));
   el.sendBtn.hidden = busy && !el.input.value.trim() && !pictures.length;
   el.sendBtn.title = busy ? 'Send (goes after this reply, or the reply reads it)' : 'Send';
   drawQueued();
@@ -2057,7 +2175,11 @@ function showPicture(src) {
   openModal({ title: 'Picture', wide: true, body: h('img', { class: 'picture-full', src, alt: 'Picture' }) });
 }
 
+// Where the browser sizes text boxes to their text (field-sizing: content, see
+// styles.css), there's nothing to do; older ones are measured here.
+const FIELD_SIZING = typeof CSS !== 'undefined' && CSS.supports('field-sizing', 'content');
 function autoGrow() {
+  if (FIELD_SIZING) return;
   el.input.style.height = 'auto';
   el.input.style.height = `${Math.min(el.input.scrollHeight, 240)}px`;
 }
@@ -3180,7 +3302,7 @@ function startEdit(chat, msg, node) {
     return;
   }
   const body = node.querySelector('.body');
-  const area = h('textarea', { class: 'input', value: msg.content });
+  const area = h('textarea', { class: 'input grow', value: msg.content });
   const box = h('div', { class: 'edit-box' }, area,
     h('div', { class: 'row' },
       h('button', { class: 'btn', text: 'Cancel', onclick: () => renderChat() }),
@@ -3197,7 +3319,7 @@ function startEdit(chat, msg, node) {
         }
       })));
   body.replaceChildren(box);
-  area.style.height = `${Math.min(400, area.scrollHeight + 10)}px`;
+  if (!FIELD_SIZING) area.style.height = `${Math.min(400, area.scrollHeight + 10)}px`;
   area.focus();
 }
 
@@ -3634,7 +3756,7 @@ function desktopVoiceView(onCleanup, field, check, lang, rate, s) {
 function openSettings(tab = 'general') {
   const s = S.settings;
   const changed = () => { saveSettings(); };
-  const pane = h('div', { class: 'settings-pane' });
+  const pane = h('div', { class: 'settings-pane', role: 'tabpanel' });
   const tabs = [
     ['general', 'General'],
     ['providers', 'Models & providers'],
@@ -3647,7 +3769,7 @@ function openSettings(tab = 'general') {
     ['data', 'Data & backup'],
     ['about', 'About']
   ];
-  const tabBar = h('div', { class: 'settings-tabs' });
+  const tabBar = h('div', { class: 'settings-tabs', role: 'tablist', 'aria-label': 'Settings' });
   let cleanups = [];
   const onCleanup = (fn) => cleanups.push(fn);
   const runCleanups = () => {
@@ -4148,10 +4270,29 @@ function openSettings(tab = 'general') {
 
   const show = (name) => {
     runCleanups();
-    for (const b of tabBar.children) b.classList.toggle('active', b.dataset.tab === name);
+    for (const b of tabBar.children) {
+      const on = b.dataset.tab === name;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;   // one Tab stop; arrow keys move between tabs
+      if (on) pane.setAttribute('aria-labelledby', b.id);
+    }
     pane.replaceChildren(...views[name]().filter(Boolean));
   };
-  for (const [id, label] of tabs) tabBar.append(h('button', { 'data-tab': id, text: label, onclick: () => show(id) }));
+  for (const [id, label] of tabs) tabBar.append(h('button', { type: 'button', role: 'tab', id: `settings-tab-${id}`, 'data-tab': id, text: label, onclick: () => show(id) }));
+  // Arrow keys (and Home, End) move to a tab and show it: selection follows focus.
+  tabBar.addEventListener('keydown', (e) => {
+    const list = [...tabBar.children];
+    const i = list.indexOf(document.activeElement);
+    if (i < 0) return;
+    const rtl = getComputedStyle(tabBar).direction === 'rtl';
+    const step = { ArrowDown: 1, ArrowUp: -1, ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1 }[e.key];
+    const next = step ? list[(i + step + list.length) % list.length] : e.key === 'Home' ? list[0] : e.key === 'End' ? list[list.length - 1] : null;
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+    show(next.dataset.tab);
+  });
 
   openModal({
     title: 'Settings',
@@ -4495,8 +4636,8 @@ function goBack() {
     top.querySelector('.modal-head .icon-btn').click();
     return;
   }
-  if (!el.chatMenu.hidden) {
-    el.chatMenu.hidden = true;
+  if (chatMenu.isOpen()) {
+    chatMenu.close();
     return;
   }
   if (el.app.classList.contains('drawer-open')) {
@@ -4591,17 +4732,20 @@ function bindEvents() {
   $('#chatMenuBtn').addEventListener('click', (e) => {
     e.stopPropagation();
     if (!S.current) {
+      e.preventDefault();   // the menu doesn't open
       toast('Send a message first to create the chat.');
       return;
     }
     el.chatMenu.querySelector('[data-action="pin"]').textContent = S.current.pinned ? 'Unpin' : 'Pin to top';
-    el.chatMenu.hidden = !el.chatMenu.hidden;
+    if (!chatMenu.popover) el.chatMenu.hidden = !el.chatMenu.hidden;
+    // With popover, the browser opens and closes it (popovertarget).
   });
-  document.addEventListener('click', () => { el.chatMenu.hidden = true; });
+  if (!chatMenu.popover) document.addEventListener('click', () => { el.chatMenu.hidden = true; });
   el.projectBtn.addEventListener('click', () => openProjectDialog());
   el.chatMenu.addEventListener('click', async (e) => {
     const action = e.target.dataset.action;
-    el.chatMenu.hidden = true;
+    if (!action) return;
+    chatMenu.close();
     if (!S.current) return;
     if (action === 'rename') renameChat();
     if (action === 'pin') { S.current.pinned = !S.current.pinned; await saveChatNow(S.current); }

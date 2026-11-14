@@ -82,7 +82,9 @@
   </div>
 
   <div id="modalRoot"></div>
-  <div id="toast" role="status" hidden></div>
+  <!-- Screen readers hear the toast from #announcer (app.js: announce). -->
+  <div id="toast" aria-hidden="true" hidden></div>
+  <div id="announcer" class="visually-hidden" role="status"></div>
 
   <script src="../node_modules/marked/lib/marked.umd.js"></script>
   <script src="../node_modules/dompurify/dist/purify.min.js"></script>

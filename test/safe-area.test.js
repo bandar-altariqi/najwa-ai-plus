@@ -21,13 +21,16 @@ const rule = (selector, from = 0) => {
 };
 
 test('dialogs keep their buttons above the navigation bar, on phones and wider screens', () => {
-  // Wide: centred, clear of every bar.
-  assert.ok(rule('.modal-backdrop').includes(`max(16px, ${BOTTOM})`));
+  // Wide: a native <dialog>, centred, its height clear of every bar.
+  const wide = rule('.modal');
+  assert.ok(wide.includes(`max(16px, ${BOTTOM})`));
+  assert.match(wide, /max-height: min\(88vh, calc\(100dvh - var\(--modal-gap-y\)\)\)/);
   // Phone: a sheet from the bottom, padded by the bar's height.
   const phone = css.indexOf('@media (max-width: 700px)');
   assert.ok(phone >= 0);
-  assert.ok(rule('.modal, .modal.wide', phone).includes(`padding-bottom: ${BOTTOM}`));
-  assert.match(rule('.modal-backdrop', phone), /align-items: end/);
+  const sheet = rule('.modal, .modal.wide', phone);
+  assert.ok(sheet.includes(`padding-bottom: ${BOTTOM}`));
+  assert.match(sheet, /margin: auto auto 0/);
 });
 
 test('the message box, the chat list and notes stay above it too', () => {

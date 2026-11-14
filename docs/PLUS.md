@@ -53,6 +53,20 @@ its replies then run as an agent there, on the desktop app.
 
 Tests: `npm test` (318 pass), including `test/{budget,git-tools,commands,hooks,helpers,homelab,replay,checkpoint-sync,cli,plus-identity}.test.js`.
 
+**The interface, checked against Modern Web Guidance** (Nov 2026; the same code
+as Najwa AI): windows are native `<dialog>`s opened with `showModal()` (the
+browser makes the page inert, keeps focus in, handles Esc and the back gesture;
+iOS 15.0-15.3 get a plain fixed box); the ⋯ chat menu is a popover menu (light
+dismiss, arrow keys, CSS anchor positioning or placed by script); settings tabs
+are tabs (roles, one Tab stop, arrow keys); a streaming reply sets `aria-busy`
+so screen readers read it once; toasts are popovers over windows and announced
+from one polite region (inside the open window, since the page is inert); the
+message box grows with `field-sizing: content` (older browsers: measured).
+Checked in Chromium, desktop and phone sizes, left-to-right and Arabic:
+`npm run build:web && node scripts/ui-check/run.js` (needs Playwright).
+Not done yet: the phone's chat list drawer (focus, inert page, swipe to close:
+the navigation-drawer guide).
+
 End to end in the real Electron app with a scripted model: `scripts/agent-e2e/`
 (`node scripts/agent-e2e/fake-model.js &` then `xvfb-run -a node scripts/agent-e2e/run.js`,
 `REVIEW=1` adds the second opinion).
