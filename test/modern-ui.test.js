@@ -72,3 +72,18 @@ test('the message box grows with its text (field-sizing guide)', () => {
   assert.match(css, /#input \{[^}]*field-sizing: content;[^}]*max-height: 240px;/);
   assert.match(fn('autoGrow'), /if \(FIELD_SIZING\) return;/);
 });
+
+test('the theme: light and both dark blocks define the same colours', () => {
+  const vars = (block) => new Set([...block.matchAll(/--([a-z-]+):/g)].map((m) => m[1]));
+  const light = vars(css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {'))));
+  const sysDark = css.slice(css.indexOf(':root:not([data-theme="light"]) {'), css.indexOf('}', css.indexOf(':root:not([data-theme="light"]) {')));
+  const userDark = css.slice(css.indexOf(':root[data-theme="dark"] {'), css.indexOf('}', css.indexOf(':root[data-theme="dark"] {')));
+  const colours = [...light].filter((v) => !/^radius/.test(v));
+  assert.ok(colours.length >= 20);
+  for (const v of colours) {
+    assert.ok(vars(sysDark).has(v), `dark (system) has --${v}`);
+    assert.ok(vars(userDark).has(v), `dark (chosen) has --${v}`);
+  }
+  // Send is a round arrow button, still named "Send" for screen readers.
+  assert.match(html, /<button id="sendBtn" class="btn primary" title="Send" aria-label="Send">\s*<svg/);
+});

@@ -914,6 +914,8 @@ function renderMessage(chat, msg, index) {
   }
 
   const when = msg.createdAt ? new Date(msg.createdAt).toLocaleString(I18n.locale(), { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  // Your message's time goes in the row of buttons under its bubble.
+  if (isUser && when) actions.prepend(h('span', { class: 'when', text: when }));
   const node = h('div', { class: `msg ${msg.role}`, 'data-id': msg.id },
     h('div', { class: 'avatar', text: isUser ? 'You' : (assistant.emoji || '🤖') }),
     h('div', { class: 'body' },

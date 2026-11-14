@@ -39,7 +39,7 @@ test('@font-face for Readex Pro: every weight, swap, a relative url, Arabic only
 });
 
 test('Readex Pro is first in the text font stack and code fonts are untouched', () => {
-  assert.match(css, /font:\s*14px\/1\.55 "Readex Pro", system-ui,/);
+  assert.match(css, /font:\s*15px\/1\.6 "Readex Pro", system-ui,/);
   const mono = css.match(/font-family:\s*ui-monospace[^;]*;/g) || [];
   assert.ok(mono.length >= 4);
   assert.ok(mono.every((m) => !m.includes('Readex')));
