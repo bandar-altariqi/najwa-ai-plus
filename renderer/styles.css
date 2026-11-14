@@ -15,22 +15,26 @@
   unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
 }
 
-/* The look (Najwa AI Plus): calm neutrals with a violet accent from the logo,
-   soft depth, generous space. Light and dark follow the system unless the user
-   picks one (data-theme). */
+/* The look (Najwa AI Plus): warm paper-like neutrals (cream in light, warm
+   greys in dark), replies set in a serif for reading, the logo's violet as the
+   accent, soft depth and generous space. Light and dark follow the system
+   unless the user picks one (data-theme). */
 :root {
-  --bg: #ffffff;
-  --bg-side: #f8f7fb;
+  /* Replies read like a page: a serif where the system has a good one.
+     Arabic keeps Readex Pro (its @font-face only covers Arabic letters). */
+  --font-read: "Readex Pro", "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Noto Serif", serif;
+  --bg: #faf9f5;
+  --bg-side: #f3f1ea;
   --bg-elev: #ffffff;
-  --bg-hover: #f0eef5;
-  --bg-active: #e8e4f3;
-  --bg-user: #f2eefc;
-  --bg-code: #f7f6fa;
-  --text: #1f1d26;
-  --text-dim: #6c6878;
-  --text-faint: #9894a5;
-  --border: #e9e6ef;
-  --border-strong: #d8d4e1;
+  --bg-hover: #edeae1;
+  --bg-active: #e6e2d6;
+  --bg-user: #efece3;
+  --bg-code: #f3f1ea;
+  --text: #1f1e1b;
+  --text-dim: #69655c;
+  --text-faint: #99948a;
+  --border: #e6e2d7;
+  --border-strong: #d6d1c4;
   --accent: #6750d8;
   --accent-solid: #6750d8;
   --accent-hover: #5941c9;
@@ -38,10 +42,10 @@
   --accent-text: #ffffff;
   --danger: #d23f45;
   --ring: 0 0 0 3px rgba(103, 80, 216, 0.22);
-  --shadow-sm: 0 1px 2px rgba(25, 20, 45, 0.06);
-  --shadow: 0 16px 40px -10px rgba(25, 20, 45, 0.22), 0 2px 6px rgba(25, 20, 45, 0.06);
-  --shadow-composer: 0 6px 28px -8px rgba(25, 20, 45, 0.14), 0 1px 3px rgba(25, 20, 45, 0.05);
-  --backdrop: rgba(18, 14, 30, 0.42);
+  --shadow-sm: 0 1px 2px rgba(60, 50, 30, 0.06);
+  --shadow: 0 16px 40px -10px rgba(60, 50, 30, 0.22), 0 2px 6px rgba(60, 50, 30, 0.06);
+  --shadow-composer: 0 4px 20px -6px rgba(60, 50, 30, 0.12), 0 1px 2px rgba(60, 50, 30, 0.05);
+  --backdrop: rgba(30, 26, 18, 0.38);
   --radius: 12px;
   --radius-lg: 22px;
   color-scheme: light;
@@ -49,18 +53,18 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #17151c;
-    --bg-side: #121016;
-    --bg-elev: #201d27;
-    --bg-hover: #292531;
-    --bg-active: #322d3d;
-    --bg-user: #2a2537;
-    --bg-code: #110f15;
-    --text: #ece9f2;
-    --text-dim: #a39fb0;
-    --text-faint: #767186;
-    --border: #2c2834;
-    --border-strong: #3b3645;
+    --bg: #262624;
+    --bg-side: #1f1e1d;
+    --bg-elev: #30302e;
+    --bg-hover: #383734;
+    --bg-active: #41403c;
+    --bg-user: #1c1b1a;
+    --bg-code: #1c1b1a;
+    --text: #efede6;
+    --text-dim: #b4afa4;
+    --text-faint: #878278;
+    --border: #3b3a36;
+    --border-strong: #4a4844;
     --accent: #a594f7;
     --accent-solid: #7a63eb;
     --accent-hover: #8a75f0;
@@ -71,24 +75,24 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-composer: 0 8px 30px -8px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.3);
-    --backdrop: rgba(5, 4, 9, 0.6);
+    --backdrop: rgba(10, 9, 8, 0.6);
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #17151c;
-  --bg-side: #121016;
-  --bg-elev: #201d27;
-  --bg-hover: #292531;
-  --bg-active: #322d3d;
-  --bg-user: #2a2537;
-  --bg-code: #110f15;
-  --text: #ece9f2;
-  --text-dim: #a39fb0;
-  --text-faint: #767186;
-  --border: #2c2834;
-  --border-strong: #3b3645;
+  --bg: #262624;
+  --bg-side: #1f1e1d;
+  --bg-elev: #30302e;
+  --bg-hover: #383734;
+  --bg-active: #41403c;
+  --bg-user: #1c1b1a;
+  --bg-code: #1c1b1a;
+  --text: #efede6;
+  --text-dim: #b4afa4;
+  --text-faint: #878278;
+  --border: #3b3a36;
+  --border-strong: #4a4844;
   --accent: #a594f7;
   --accent-solid: #7a63eb;
   --accent-hover: #8a75f0;
@@ -99,7 +103,7 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-composer: 0 8px 30px -8px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.3);
-  --backdrop: rgba(5, 4, 9, 0.6);
+  --backdrop: rgba(10, 9, 8, 0.6);
   color-scheme: dark;
 }
 
@@ -240,20 +244,10 @@ input, progress { accent-color: var(--accent-solid); }
 #messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 28px 20px 12px; }
 .msg-wrap { max-width: 768px; margin: 0 auto; }
 
-.msg { display: flex; gap: 14px; margin-bottom: 30px; }
-/* The assistant: a small round mark, then the reply as plain, roomy text. */
-.msg .avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  font-size: 15px;
-}
+.msg { display: flex; gap: 14px; margin-bottom: 34px; }
+/* The assistant: the reply as plain, roomy text across the column, under a
+   small line with the assistant and model. */
+.msg .avatar { display: none; }
 .msg .body { flex: 1; min-width: 0; max-width: 100%; }
 .msg .meta { font-size: 12.5px; color: var(--text-faint); margin: 4px 0 6px; display: flex; flex-wrap: wrap; column-gap: 8px; }
 .msg .meta > span:first-child { color: var(--text); font-weight: 600; }
@@ -267,7 +261,8 @@ input, progress { accent-color: var(--accent-solid); }
 .msg.user .actions { margin-top: 4px; align-items: center; }
 .msg .actions .when { font-size: 12px; color: var(--text-faint); padding: 0 6px; white-space: nowrap; }
 .msg.user .content { background: var(--bg-user); padding: 10px 16px; border-radius: 20px; white-space: pre-wrap; word-wrap: break-word; }
-.msg.assistant .content { font-size: 15.5px; line-height: 1.7; }
+.msg.assistant .content { font-family: var(--font-read); font-size: 16.5px; line-height: 1.65; }
+.msg.assistant .content :is(table, th, td) { font-size: 15px; }
 .msg .content { overflow-wrap: anywhere; }
 .msg .content > :first-child { margin-top: 0; }
 .msg .content > :last-child { margin-bottom: 0; }
@@ -362,7 +357,7 @@ details.thinking summary { cursor: pointer; }
 /* ---------- welcome ---------- */
 
 .welcome { max-width: 720px; margin: 10vh auto 0; text-align: center; }
-.welcome h2 { font-size: 30px; font-weight: 650; letter-spacing: -0.025em; line-height: 1.2; margin: 0 0 10px; }
+.welcome h2 { font-family: var(--font-read); font-size: 36px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.2; margin: 0 0 12px; }
 .welcome > p { color: var(--text-dim); font-size: 15.5px; margin: 0 auto 28px; max-width: 560px; }
 .assistant-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; text-align: start; }
 .assistant-card {
@@ -429,8 +424,8 @@ details.thinking summary { cursor: pointer; }
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding-block: 8px;
-  padding-inline: 8px;
+  padding-block: 10px;
+  padding-inline: 10px;
   box-shadow: var(--shadow-composer);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -452,14 +447,14 @@ details.thinking summary { cursor: pointer; }
 #input::placeholder { color: var(--text-faint); }
 .hint { max-width: 768px; margin: 8px auto 0; font-size: 11.5px; color: var(--text-faint); text-align: center; }
 /* Send: a round button with an arrow. */
-#sendBtn { width: 36px; height: 36px; padding: 0; border-radius: 50%; display: grid; place-items: center; flex: none; }
+#sendBtn { width: 34px; height: 34px; padding: 0; border-radius: 10px; display: grid; place-items: center; flex: none; align-self: flex-end; margin: 1px; }
 #sendBtn svg { display: block; }
 
 /* The microphone in the message box; red and pulsing while it listens. */
 .mic-btn { align-self: flex-end; display: grid; place-items: center; }
 .attach-btn { align-self: flex-end; display: grid; place-items: center; }
 /* Stop, next to Send while a reply is written. */
-.icon-btn.stop-btn { align-self: flex-end; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; color: var(--bg); background: var(--text); border-radius: 50%; }
+.icon-btn.stop-btn { align-self: flex-end; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; color: var(--bg); background: var(--text); border-radius: 10px; margin: 1px; }
 .icon-btn.stop-btn:hover { opacity: 0.85; background: var(--text); color: var(--bg); }
 .stop-btn[hidden] { display: none; }
 /* Messages written while a reply is still coming: sent when it's done. */
@@ -540,7 +535,7 @@ a.btn { display: inline-block; text-decoration: none; color: inherit; }
   color: var(--text-dim);
   transition: background-color 0.12s, color 0.12s;
 }
-.composer-box .icon-btn { border-radius: 50%; width: 36px; height: 36px; }
+.composer-box .icon-btn { border-radius: 10px; width: 36px; height: 36px; }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text); }
 
 .input, .select, textarea.input {
@@ -802,13 +797,12 @@ textarea.grow { field-sizing: content; min-height: 6em; max-height: 400px; }
 
   #messages { padding: 16px 12px 8px; }
   .msg { gap: 10px; }
-  .msg .avatar { width: 26px; height: 26px; font-size: 13px; }
   .msg.user .body { max-width: 88%; }
-  .msg.assistant .content { font-size: 15.5px; }
+  .msg.assistant .content { font-size: 16px; }
   .msg .actions button { padding: 6px 10px; }
 
   .welcome { margin-top: 4vh; }
-  .welcome h2 { font-size: 24px; }
+  .welcome h2 { font-size: 28px; }
   .assistant-cards { grid-template-columns: 1fr; }
 
   #composer { padding: 4px 10px calc(10px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom))); }

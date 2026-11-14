@@ -78,7 +78,7 @@ test('the theme: light and both dark blocks define the same colours', () => {
   const light = vars(css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {'))));
   const sysDark = css.slice(css.indexOf(':root:not([data-theme="light"]) {'), css.indexOf('}', css.indexOf(':root:not([data-theme="light"]) {')));
   const userDark = css.slice(css.indexOf(':root[data-theme="dark"] {'), css.indexOf('}', css.indexOf(':root[data-theme="dark"] {')));
-  const colours = [...light].filter((v) => !/^radius/.test(v));
+  const colours = [...light].filter((v) => !/^(radius|font)/.test(v));
   assert.ok(colours.length >= 20);
   for (const v of colours) {
     assert.ok(vars(sysDark).has(v), `dark (system) has --${v}`);
