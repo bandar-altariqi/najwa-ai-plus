@@ -16,8 +16,9 @@
 }
 
 /* The look (Najwa AI Plus): warm paper-like neutrals (cream in light, warm
-   greys in dark), replies set in a serif for reading, the logo's violet as the
-   accent, soft depth and generous space. Light and dark follow the system
+   greys in dark), replies set in a serif for reading, a warm terracotta accent
+   (the logo's coral bubble, deepened so white text on it stays readable),
+   soft depth and generous space. Light and dark follow the system
    unless the user picks one (data-theme). */
 :root {
   /* Replies read like a page: a serif where the system has a good one.
@@ -35,13 +36,13 @@
   --text-faint: #99948a;
   --border: #e6e2d7;
   --border-strong: #d6d1c4;
-  --accent: #6750d8;
-  --accent-solid: #6750d8;
-  --accent-hover: #5941c9;
-  --accent-soft: #efebfc;
+  --accent: #ae5032;
+  --accent-solid: #b85535;
+  --accent-hover: #a94c30;
+  --accent-soft: #f6e7e0;
   --accent-text: #ffffff;
   --danger: #d23f45;
-  --ring: 0 0 0 3px rgba(103, 80, 216, 0.22);
+  --ring: 0 0 0 3px rgba(184, 85, 53, 0.22);
   --shadow-sm: 0 1px 2px rgba(60, 50, 30, 0.06);
   --shadow: 0 16px 40px -10px rgba(60, 50, 30, 0.22), 0 2px 6px rgba(60, 50, 30, 0.06);
   --shadow-composer: 0 4px 20px -6px rgba(60, 50, 30, 0.12), 0 1px 2px rgba(60, 50, 30, 0.05);
@@ -65,13 +66,13 @@
     --text-faint: #878278;
     --border: #3b3a36;
     --border-strong: #4a4844;
-    --accent: #a594f7;
-    --accent-solid: #7a63eb;
-    --accent-hover: #8a75f0;
-    --accent-soft: #2b2545;
+    --accent: #e08a6c;
+    --accent-solid: #b85535;
+    --accent-hover: #c15f3c;
+    --accent-soft: #3b2b25;
     --accent-text: #ffffff;
     --danger: #f0676c;
-    --ring: 0 0 0 3px rgba(165, 148, 247, 0.28);
+    --ring: 0 0 0 3px rgba(224, 138, 108, 0.3);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-composer: 0 8px 30px -8px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -93,13 +94,13 @@
   --text-faint: #878278;
   --border: #3b3a36;
   --border-strong: #4a4844;
-  --accent: #a594f7;
-  --accent-solid: #7a63eb;
-  --accent-hover: #8a75f0;
-  --accent-soft: #2b2545;
+  --accent: #e08a6c;
+  --accent-solid: #b85535;
+  --accent-hover: #c15f3c;
+  --accent-soft: #3b2b25;
   --accent-text: #ffffff;
   --danger: #f0676c;
-  --ring: 0 0 0 3px rgba(165, 148, 247, 0.28);
+  --ring: 0 0 0 3px rgba(224, 138, 108, 0.3);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow: 0 18px 44px -10px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-composer: 0 8px 30px -8px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -479,7 +480,7 @@ details.thinking summary { cursor: pointer; }
 .file-remove:hover { color: var(--text); background: var(--bg-hover); }
 .msg-files { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
 .file-view { margin: 0; max-height: 70vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12.5px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--bg-code); padding: 12px; border-radius: 8px; }
-.composer.dropping .composer-box, #composer.dropping .composer-box { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91, 91, 214, 0.18); }
+.composer.dropping .composer-box, #composer.dropping .composer-box { border-color: var(--accent); box-shadow: var(--ring); }
 .attachment-remove { position: absolute; top: -6px; inset-inline-end: -6px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0; }
 .msg-pictures { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
 .msg-pictures img { max-width: min(240px, 100%); max-height: 200px; border-radius: 8px; border: 1px solid var(--border); cursor: zoom-in; object-fit: contain; }
