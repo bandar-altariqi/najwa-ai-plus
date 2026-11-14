@@ -16,6 +16,8 @@ its own license, and the Najwa AI License does not change or limit it.
 | [OpenCL Headers](https://github.com/KhronosGroup/OpenCL-Headers) | Building GPU support (Android) | Apache-2.0 | © 2008-2020 The Khronos Group Inc. |
 | [Google Play services Auth](https://developers.google.com/android/guides/overview) (`play-services-auth`) | Google sign-in for Drive sync (Android) | [Android Software Development Kit License](https://developer.android.com/studio/terms) | © Google LLC |
 | [Modern Web Guidance](https://github.com/GoogleChrome/modern-web-guidance) (guides) | The agent's web best-practice guides (Plus, desktop) | Apache-2.0 | © Google LLC and the Modern Web Guidance contributors (Chrome, Edge, Firefox and MDN teams) |
+| [Inter](https://github.com/rsms/inter) (font, variable weight) | English text in the interface | SIL Open Font License 1.1 | © 2016 The Inter Project Authors (https://github.com/rsms/inter) |
+| [Source Serif 4](https://github.com/adobe-fonts/source-serif) (font, variable weight) | English text in replies | SIL Open Font License 1.1 | © 2014-2023 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source' |
 | [Readex Pro](https://github.com/google/fonts/tree/main/ofl/readexpro) (font, variable weight) | Arabic text | SIL Open Font License 1.1 | © 2018 The Readex Pro Project Authors (https://github.com/ThomasJockin/readexpro) |
 
 The full license texts come with each component. In the source tree they are in
@@ -33,6 +35,12 @@ unmodified. Its `SKILL.md` is rewritten for Najwa AI Plus (the agent reads the
 bundled guides instead of running its command-line tool). The Apache License 2.0
 text and the details of the changes come with it, in
 `skills/modern-web-guidance/LICENSE` and `NOTICE.md`.
+
+Inter and Source Serif 4 are bundled as the Latin WOFF2 files Google Fonts
+serves (through Fontsource), otherwise unmodified, under the SIL Open Font
+License, Version 1.1, included in full as `fonts/Inter-OFL.txt` and
+`fonts/SourceSerif4-OFL.txt` (in the source tree under `renderer/fonts/`).
+They are not sold on their own, and their names are unchanged.
 
 ## MIT License (text)
 

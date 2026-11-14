@@ -15,6 +15,59 @@
   unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
 }
 
+/* English (Latin) text: Inter for the interface and Source Serif 4 for replies
+   (both SIL Open Font License 1.1, see fonts/Inter-OFL.txt and
+   fonts/SourceSerif4-OFL.txt), the same on every device. Free stand-ins for the
+   commercial fonts big chat apps use; shipped inside the app, no network. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Inter-Latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Inter-LatinExt.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/Inter-Latin-Italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("fonts/SourceSerif4-Latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("fonts/SourceSerif4-LatinExt.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("fonts/SourceSerif4-Latin-Italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* The look (Najwa AI Plus): warm paper-like neutrals (cream in light, warm
    greys in dark), replies set in a serif for reading, a warm terracotta accent
    (the logo's coral bubble, deepened so white text on it stays readable),
@@ -23,7 +76,7 @@
 :root {
   /* Replies read like a page: a serif where the system has a good one.
      Arabic keeps Readex Pro (its @font-face only covers Arabic letters). */
-  --font-read: "Readex Pro", "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Noto Serif", serif;
+  --font-read: "Readex Pro", "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Noto Serif", serif;
   --bg: #faf9f5;
   --bg-side: #f3f1ea;
   --bg-elev: #ffffff;
@@ -121,7 +174,7 @@ html, body {
   text-size-adjust: 100%;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.6 "Readex Pro", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  font: 15px/1.6 "Readex Pro", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
