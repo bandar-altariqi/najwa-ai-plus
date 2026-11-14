@@ -57,6 +57,7 @@
       "preload.js",
       "src/**/*",
       "renderer/**/*",
+      "skills/**/*",
       "build/icon.png",
       "package.json",
       "LICENSE",

@@ -345,6 +345,26 @@ const TASKS = {
       'stopped': /Stopped at the budget/.test(log.text) && read(root, 'summary.txt') === null
     })
   },
+  // Modern Web Guidance (the built-in skill): look up the guide, then build it the modern way.
+  'web-guide': {
+    files: {
+      'index.html': '<!doctype html>\n<html lang="en">\n<head><meta charset="utf-8"><title>Items</title><link rel="stylesheet" href="style.css"></head>\n<body>\n  <ul id="items">\n    <li>Milk <button class="delete">Delete</button></li>\n    <li>Bread <button class="delete">Delete</button></li>\n  </ul>\n  <script src="app.js"></script>\n</body>\n</html>\n',
+      'style.css': 'body { font-family: system-ui, sans-serif; margin: 2rem; }\n',
+      'app.js': "document.querySelectorAll('.delete').forEach((b) => b.addEventListener('click', () => b.closest('li').remove()));\n"
+    },
+    ask: 'Before an item is deleted, ask "Delete this item?" with Cancel and Delete buttons, in a box on the page (not the browser\'s confirm()). It should look nice and be accessible.',
+    mode: 'auto',
+    options: { skillDirs: [path.join(__dirname, '..', '..')] },
+    check: (root, log) => {
+      const page = `${read(root, 'index.html') || ''}\n${read(root, 'app.js') || ''}`;
+      return {
+        'searched the guides': log.calls.some((c) => c.name === 'web_guide' && c.args.action === 'search'),
+        'read a guide': log.calls.some((c) => c.name === 'web_guide' && c.args.action === 'read'),
+        'a native <dialog>': /<dialog|createElement\(['"]dialog/.test(page) && /showModal|commandfor|command=/.test(page),
+        'no confirm()': !/\bconfirm\(/.test(read(root, 'app.js') || '')
+      };
+    }
+  },
   'secret-copy': {
     files: {
       '.env': `API_URL=https://api.example.com\nAPI_KEY=${SECRET}\n`,

@@ -34,7 +34,8 @@ its replies then run as an agent there, on the desktop app.
 | 💰 **Budget guard**: each step's tokens (OpenAI-style `stream_options`, Claude, Ollama), live tokens and cost on the reply, a cap per task in dollars and/or tokens (Settings → Agent; prices are the user's, none guessed); at the cap a card asks Keep going / Stop | `src/agent/budget.js`, `src/tool-chat.js` |
 | 🌿 **Git tools**: git_status, git_diff, git_log (look, every mode); git_commit (asked like a command, card shows message and files, never pushes). git runs with an argument list, never a shell; private files left out | `src/agent/git.js` |
 | **Slash commands**: `/name args` → `.najwa/commands/name.md` (or `.claude/commands/`, or `<data>/agent/commands`), `$ARGUMENTS`/`$1`; built in `/review`, `/init`; typing `/` lists them | `src/agent/commands.js`, `main.js` (runChat) |
-| 🧩 **Skills**: `SKILL.md` folders (`.najwa/skills`, `.claude/skills`, the app's); the prompt lists name + description, `use_skill` loads the rest | `src/agent/commands.js` |
+| 🧩 **Skills**: `SKILL.md` folders (`.najwa/skills`, `.claude/skills`, the app's data folder, then the ones that come with Plus in `skills/`); the prompt lists name + description, `use_skill` loads the rest | `src/agent/commands.js` |
+| 📐 **Modern Web Guidance** (built in): ~200 guides to today's web platform from the Chrome, Edge, Firefox and MDN teams (Apache-2.0), in `skills/modern-web-guidance/`. The `web_guide` tool searches and reads them offline (the original skill runs `npx`); a project's own copy of the skill replaces it. Updating: `skills/modern-web-guidance/NOTICE.md` | `src/agent/web-guide.js` |
 | 🪝 **Hooks**: `.najwa/hooks.json` before/after commands around tools (a failing before hook stops the tool; after output goes to the model). Never automatic: the exact commands are shown first; Always trusts that fingerprint, any change asks again | `src/agent/hooks.js` |
 | 🤝 **Helper agents**: `ask_helper` → same (or the crew's) model, fresh context, only the tools that look; steps shown, tokens in the same budget; several in one step run in parallel (`tools.parallel` in the tool loop) | `src/agent/helpers.js`, `src/tool-chat.js` |
 | 👥 **Mixed crew** (Helpers use: another model) and **Local only** (project chats, helpers and second opinion stay local; a local project never gets a cloud helper: `chooseHelper`) | `src/agent/helpers.js`, `main.js` |
@@ -57,11 +58,11 @@ End to end in the real Electron app with a scripted model: `scripts/agent-e2e/`
 `REVIEW=1` adds the second opinion).
 
 **With a real model**, without the window: `scripts/agent-real/run.js` runs the
-same tool loop and tools on 17 small checked projects (fix a bug, a feature, a
+same tool loop and tools on 19 small checked projects (fix a bug, a feature, a
 rename around a secret, plan mode, a "no", a question, a refactor, a background
 server, a prompt injection, a to-do app across files, two bugs, fix-and-commit,
 a skill via a slash command, a hook, helpers, the budget stop, copying a file
-with a secret, a mixed crew). Steps go to `$AGENT_REAL_DIR/<task>.json` and a replay page to
+with a secret, a mixed crew, a web dialog built from the Modern Web Guidance guides). Steps go to `$AGENT_REAL_DIR/<task>.json` and a replay page to
 `<task>.html`. DeepSeek, for example:
 `NODE_USE_ENV_PROXY=1 MODEL_URL=https://api.deepseek.com MODEL=deepseek-flash MODEL_KEY=… node scripts/agent-real/run.js`
 (`KIND=ollama MODEL_URL=http://127.0.0.1:11434 MODEL=qwen3:4b` for Ollama,
@@ -71,6 +72,9 @@ opinion on (about $0.04 for the whole run at that price); V4 Pro passed the
 first ten; the crew task runs V4 Pro planning with V4.1 Flash as the worker
 (`CREW_MODEL=deepseek-flash`). A 68,551-character conversation compacted to
 1,492 characters with all ten key facts kept.
+web-guide (V4.1 Flash): loaded the skill, searched "confirmation dialog",
+read dialog, accessibility and light-dismiss-a-dialog, and built a native
+`<dialog>` with `showModal()` and `form method="dialog"`; 73 s, $0.012.
 Fixed from these runs: secrets after read_file's line numbers and
 search_files' "path:line:" weren't hidden unless they looked like a known key
 (`test/firewall-lines.test.js`).

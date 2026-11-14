@@ -301,7 +301,8 @@ const approvals = localApprovals();
 // Checkpoints (undo) live in the data folder; background commands last while
 // the app runs.
 const checkpoints = createCheckpoints(path.join(dataDir, 'agent-checkpoints'));
-// The app's own commands and skills, for every project (<data>/agent/commands, /skills).
+// The app's own commands and skills, for every project (<data>/agent/commands, /skills),
+// and the skills that come with Plus (skills/ in the app: Modern Web Guidance).
 const agentDir = path.join(dataDir, 'agent');
 const runsDir = path.join(dataDir, 'agent-runs');
 const summaries = summaryStore(path.join(dataDir, 'agent-summaries'));
@@ -388,7 +389,7 @@ async function agentToolset(providerId, cfg, settings, req, spec, onInfo, signal
     root,
     chatId: req.chatId,
     mode: spec.mode || a.defaultMode || 'ask',
-    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, providerPrice: cfg.price || null, skillDirs: [agentDir], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperFor(providerId, cfg, req.model || '', a, settings, onInfo), machines: a.machines || '' },
+    options: { rules: a.rules || [], dryRun: a.dryRun || 'risky', prices: a.prices || '', budgetUsd: a.budgetUsd || 0, budgetTokens: a.budgetTokens || 0, providerPrice: cfg.price || null, skillDirs: [agentDir, __dirname], trustedHooks: a.trustedHooks || [], onTrustHooks: (hash) => trustHooks(hash).catch(() => {}), runHelper: helperFor(providerId, cfg, req.model || '', a, settings, onInfo), machines: a.machines || '' },
     model: req.model || '',
     local: isLocalModel(providerId, cfg),
     firewall,

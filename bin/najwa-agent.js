@@ -167,7 +167,7 @@ async function main() {
       prices: o.prices || process.env.NAJWA_PRICES || '',
       budgetUsd: Number(o['budget-usd']) || 0,
       budgetTokens: Number(o['budget-tokens']) || 0,
-      skillDirs: [data],
+      skillDirs: [data, path.join(__dirname, '..')],
       runHelper: helperRunner({ kind: TOOL_KINDS[provider], cfg, model, onInfo })
     },
     firewall,

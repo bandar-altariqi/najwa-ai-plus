@@ -37,6 +37,8 @@ It's a separate app: it installs **beside** Najwa AI, with its own data, and nev
 - 🎙️ **Voice and Arabic:** talk to it (Whisper, on your computer); it reads back its questions and finished steps in Arabic or English, and diffs read correctly right to left.
 - 💰 **Budget guard:** each task shows its tokens and cost as it works (with the prices you enter per provider), and stops to ask at your spending cap.
 
+📐 **Modern web know-how built in:** for web front-end work, the agent first looks up [Modern Web Guidance](https://github.com/GoogleChrome/modern-web-guidance), about 200 expert guides from the Chrome, Edge, Firefox and MDN teams, so it writes today's HTML, CSS and JavaScript instead of old patterns. The guides come with the app and work offline.
+
 **Also:** slash commands (`/review`, `/init`, and your own in `.najwa/commands/`), skills (`SKILL.md` folders), project hooks you approve first, helper agents that explore in parallel, long tasks that summarise older messages to make room, and **`najwa-agent`**, the same agent from a terminal or script.
 
 The agent runs in the **desktop app** (Windows, Mac, Linux). The **phone app** is its remote control and approver, and a full Najwa AI chat app on its own. It works with any model that can use tools: Ollama or LM Studio on your computer, or Claude, OpenAI, DeepSeek and other OpenAI-compatible services with your own key.

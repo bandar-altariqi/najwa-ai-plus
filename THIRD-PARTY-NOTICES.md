@@ -15,6 +15,7 @@ its own license, and the Najwa AI License does not change or limit it.
 | [Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript) | Connecting to Claude | Apache-2.0 | © 2023 Anthropic, PBC |
 | [OpenCL Headers](https://github.com/KhronosGroup/OpenCL-Headers) | Building GPU support (Android) | Apache-2.0 | © 2008-2020 The Khronos Group Inc. |
 | [Google Play services Auth](https://developers.google.com/android/guides/overview) (`play-services-auth`) | Google sign-in for Drive sync (Android) | [Android Software Development Kit License](https://developer.android.com/studio/terms) | © Google LLC |
+| [Modern Web Guidance](https://github.com/GoogleChrome/modern-web-guidance) (guides) | The agent's web best-practice guides (Plus, desktop) | Apache-2.0 | © Google LLC and the Modern Web Guidance contributors (Chrome, Edge, Firefox and MDN teams) |
 | [Readex Pro](https://github.com/google/fonts/tree/main/ofl/readexpro) (font, variable weight) | Arabic text | SIL Open Font License 1.1 | © 2018 The Readex Pro Project Authors (https://github.com/ThomasJockin/readexpro) |
 
 The full license texts come with each component. In the source tree they are in
@@ -26,6 +27,12 @@ Arabic part, otherwise unmodified. It is licensed under the
 SIL Open Font License, Version 1.1, which is included in full in the app as
 `fonts/OFL.txt` (and in the source tree as `renderer/fonts/OFL.txt`). The font is
 not sold on its own, and its name is unchanged.
+
+Modern Web Guidance's guides are bundled in `skills/modern-web-guidance/guides/`,
+unmodified. Its `SKILL.md` is rewritten for Najwa AI Plus (the agent reads the
+bundled guides instead of running its command-line tool). The Apache License 2.0
+text and the details of the changes come with it, in
+`skills/modern-web-guidance/LICENSE` and `NOTICE.md`.
 
 ## MIT License (text)
 
