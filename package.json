@@ -43,7 +43,7 @@
     "@capacitor/ios": "^8.6.0",
     "@capacitor/share": "^8.0.3",
     "@resvg/resvg-js": "^2.6.2",
-    "@wllama/wllama": "^3.8.1",
+    "@wllama/wllama": "^3.13.0",
     "balimda-llama": "file:native/llama",
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0",
