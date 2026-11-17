@@ -145,5 +145,9 @@ chat. Not yet tried on a real phone.
 - Keep every source file's license header. Never commit keys or secrets.
 - Approvals for risky actions are never automatic (harm checks always ask).
 - Run `npm test` before every push; for UI changes, check it in the real app.
+  `npm run verify` runs the checks that fit what changed (tests, a secrets check,
+  and for interface changes the phone build, `scripts/ui-check/run.js` and
+  screenshots from `scripts/ui-check/shots.js`); the `verify` skill
+  (`.claude/skills/verify/SKILL.md`) says how to use it and what to look at.
 - Push to `main` here when tests pass (the owner asked for direct merges). Ask before anything public.
 - Write UI text in plain, short English (the app also has Arabic via `renderer/i18n-ar.js`).
