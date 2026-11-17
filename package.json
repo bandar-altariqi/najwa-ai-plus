@@ -46,7 +46,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "@wllama/wllama": "^3.8.1",
     "balimda-llama": "file:native/llama",
-    "electron": "^45.2.3",
+    "electron": "^45.3.2",
     "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2"
   },
