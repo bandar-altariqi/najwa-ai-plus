@@ -18,6 +18,7 @@
 // hash, so the same image in the same place is recognised in the KV cache.
 
 #include "balimda_engine.h"
+#include "chat_formats.h"
 
 #include <algorithm>
 #include <chrono>
@@ -195,6 +196,7 @@ bool has_special_token(const llama_vocab * vocab, const char * text) {
 // any other model was wrong for Gemma: it read "<|im_start|>" as plain text,
 // never ended its turn, and wrote both sides of a made-up chat.
 std::string fallback_template(const llama_vocab * vocab) {
+    if (has_special_token(vocab, "<|turn>") && has_special_token(vocab, "<turn|>")) return "gemma4";  // chat_formats.h
     if (has_special_token(vocab, "<start_of_turn>")) return "gemma";
     if (has_special_token(vocab, "<|start_header_id|>")) return "llama3";
     if (has_special_token(vocab, "<|im_start|>")) return "chatml";
@@ -209,7 +211,7 @@ std::string fallback_template(const llama_vocab * vocab) {
 // "<end_of_" also catches the made-up "<end_of_assistant>" and "<end_of_user>".
 const char * const TURN_MARKERS[] = {
     "<|im_start|>", "<|im_end|>", "<start_of_turn>", "<end_of_turn>", "<|eot_id|>", "<|start_header_id|>",
-    "<|end_header_id|>", "<|endoftext|>", "<|user|>", "<|assistant|>", "<|end|>", "<end_of_",
+    "<|end_header_id|>", "<|endoftext|>", "<|user|>", "<|assistant|>", "<|end|>", "<end_of_", "<|turn>", "<turn|>",
 };
 
 // Where the first turn marker starts in `text` (npos: none).
@@ -251,6 +253,9 @@ std::string apply_template(const be_engine & e, const std::vector<std::string> &
         }
         return n;
     };
+    // Formats llama.cpp doesn't have yet (chat_formats.h): Gemma 4's, from its
+    // template or, with none in the file, from its turn tokens.
+    if (chat_formats::is_gemma4(e.tmpl) || e.fallback == "gemma4") return chat_formats::gemma4(roles, contents, true);
     // The model's own template, or (none in its file, or one llama.cpp doesn't
     // know) the format its turn tokens show (fallback_template).
     int32_t n = e.tmpl.empty() ? -1 : run(e.tmpl.c_str());

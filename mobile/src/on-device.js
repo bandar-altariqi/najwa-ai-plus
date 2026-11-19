@@ -182,7 +182,7 @@ async function ensureLoaded(name, ctx, gpu) {
 // Chat turn markers a reply must never contain (see native/llama/engine:
 // TURN_MARKERS). "<end_of_" also catches made-up ones like "<end_of_assistant>".
 export const TURN_MARKERS = ['<|im_start|>', '<|im_end|>', '<start_of_turn>', '<end_of_turn>', '<|eot_id|>', '<|start_header_id|>',
-  '<|end_header_id|>', '<|endoftext|>', '<|user|>', '<|assistant|>', '<|end|>', '<end_of_'];
+  '<|end_header_id|>', '<|endoftext|>', '<|user|>', '<|assistant|>', '<|end|>', '<end_of_', '<|turn>', '<turn|>'];
 
 export const onDevice = {
   async listModels() {

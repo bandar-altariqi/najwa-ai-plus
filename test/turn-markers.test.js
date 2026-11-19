@@ -24,6 +24,9 @@ test('no chat template: the format comes from the model\'s own turn tokens, not 
   assert.match(engine, /if \(has_special_token\(vocab, "<start_of_turn>"\)\) return "gemma";/);
   assert.match(engine, /if \(has_special_token\(vocab, "<\|start_header_id\|>"\)\) return "llama3";/);
   assert.match(engine, /e->fallback = fallback_template\(e->vocab\);/);
+  // Gemma 4 (llama.cpp doesn't have its format yet): by its template or, with none, by its turn tokens.
+  assert.match(engine, /return "gemma4";  \/\/ chat_formats\.h/);
+  assert.match(engine, /if \(chat_formats::is_gemma4\(e\.tmpl\) \|\| e\.fallback == "gemma4"\) return chat_formats::gemma4\(roles, contents, true\);/);
   // The model's template first, then its fallback; never a bare llama_chat_apply_template(nullptr) (that's ChatML).
   assert.match(engine, /int32_t n = e\.tmpl\.empty\(\) \? -1 : run\(e\.tmpl\.c_str\(\)\);\s*if \(n < 0\) n = run\(e\.fallback\.c_str\(\)\);/);
   assert.doesNotMatch(engine, /run\(e\.tmpl\.empty\(\) \? nullptr/);
@@ -34,7 +37,7 @@ test('both engines stop a reply at a chat marker written as text, with the same 
   const native = list(engine.slice(engine.indexOf('const char * const TURN_MARKERS[]'), engine.indexOf('};', engine.indexOf('const char * const TURN_MARKERS[]'))));
   const web = list(wasm.slice(wasm.indexOf('export const TURN_MARKERS'), wasm.indexOf('];', wasm.indexOf('export const TURN_MARKERS'))));
   assert.deepStrictEqual(web, native);
-  for (const m of ['<|im_start|>', '<|im_end|>', '<end_of_turn>', '<start_of_turn>', '<|eot_id|>', '<end_of_']) assert.ok(native.includes(m), m);
+  for (const m of ['<|im_start|>', '<|im_end|>', '<end_of_turn>', '<start_of_turn>', '<|eot_id|>', '<end_of_', '<|turn>', '<turn|>']) assert.ok(native.includes(m), m);
   // Native: the reply ends before the marker; a possible marker's start waits for the next piece.
   assert.match(engine, /const size_t marker = find_turn_marker\(pending\);/);
   assert.match(engine, /pending\.erase\(marker\);/);
