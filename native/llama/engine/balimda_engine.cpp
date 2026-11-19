@@ -58,7 +58,8 @@ struct be_engine {
     mtmd_context * vision = nullptr;  // the image part, when loaded
     std::vector<llama_token> cached;  // tokens currently in the KV cache (images as negative ids)
     std::vector<llama_pos> cached_pos;  // the position of each (an image's tokens share its first)
-    std::string tmpl;                 // chat template ("" = built-in default)
+    std::string tmpl;                 // the model's chat template ("" = none in the file)
+    std::string fallback = "chatml";  // a known format for this model, when its template is missing or unknown
     std::string offload;              // e.g. "offloaded 29/29 layers to GPU"
     // Where the kept part of the chat started last time (when it had to be
     // shortened). Starting there again while it fits keeps the start of the
@@ -182,6 +183,57 @@ int decode(llama_context * ctx, const llama_token * tokens, int32_t n, llama_pos
     return rc;
 }
 
+// Whether `text` is one special token of this model (e.g. Gemma's "<start_of_turn>").
+bool has_special_token(const llama_vocab * vocab, const char * text) {
+    llama_token out[4];
+    const int32_t n = llama_tokenize(vocab, text, int32_t(std::strlen(text)), out, 4, false, true);
+    return n == 1 && (llama_vocab_get_attr(vocab, out[0]) & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_USER_DEFINED)) != 0;
+}
+
+// The chat format to use when a model's file has no chat template, or one
+// llama.cpp doesn't know: the one whose turn tokens this model has. ChatML for
+// any other model was wrong for Gemma: it read "<|im_start|>" as plain text,
+// never ended its turn, and wrote both sides of a made-up chat.
+std::string fallback_template(const llama_vocab * vocab) {
+    if (has_special_token(vocab, "<start_of_turn>")) return "gemma";
+    if (has_special_token(vocab, "<|start_header_id|>")) return "llama3";
+    if (has_special_token(vocab, "<|im_start|>")) return "chatml";
+    if (has_special_token(vocab, "<|user|>") && has_special_token(vocab, "<|end|>")) return "phi3";
+    if (has_special_token(vocab, "<|START_OF_TURN_TOKEN|>")) return "command-r";
+    return "chatml";
+}
+
+// Chat turn markers a reply must never contain. A model that writes one as
+// text has lost track of the format and is starting another turn (often
+// writing the user's next message itself): the reply ends just before it.
+// "<end_of_" also catches the made-up "<end_of_assistant>" and "<end_of_user>".
+const char * const TURN_MARKERS[] = {
+    "<|im_start|>", "<|im_end|>", "<start_of_turn>", "<end_of_turn>", "<|eot_id|>", "<|start_header_id|>",
+    "<|end_header_id|>", "<|endoftext|>", "<|user|>", "<|assistant|>", "<|end|>", "<end_of_",
+};
+
+// Where the first turn marker starts in `text` (npos: none).
+size_t find_turn_marker(const std::string & text) {
+    size_t best = std::string::npos;
+    for (const char * m : TURN_MARKERS) {
+        const size_t at = text.find(m);
+        if (at < best) best = at;
+    }
+    return best;
+}
+
+// How much of the end of `text` could be the start of a turn marker (kept back
+// until the next piece shows whether it is one).
+size_t marker_prefix_at_end(const std::string & text) {
+    const size_t lt = text.rfind('<');
+    if (lt == std::string::npos || text.size() - lt > 24) return 0;
+    const std::string tail = text.substr(lt);
+    for (const char * m : TURN_MARKERS) {
+        if (std::strncmp(m, tail.c_str(), tail.size()) == 0) return tail.size();
+    }
+    return 0;
+}
+
 std::string apply_template(const be_engine & e, const std::vector<std::string> & roles,
                            const std::vector<std::string> & contents) {
     std::vector<llama_chat_message> msgs;
@@ -199,8 +251,11 @@ std::string apply_template(const be_engine & e, const std::vector<std::string> &
         }
         return n;
     };
-    int32_t n = run(e.tmpl.empty() ? nullptr : e.tmpl.c_str());
-    if (n < 0) n = run("chatml");  // unknown template: ChatML works for most small models
+    // The model's own template, or (none in its file, or one llama.cpp doesn't
+    // know) the format its turn tokens show (fallback_template).
+    int32_t n = e.tmpl.empty() ? -1 : run(e.tmpl.c_str());
+    if (n < 0) n = run(e.fallback.c_str());
+    if (n < 0) n = run("chatml");
     if (n < 0) return {};
     return std::string(buf.data(), n);
 }
@@ -269,6 +324,8 @@ be_engine * be_load(const char * path, int n_ctx, int n_gpu_layers, int n_thread
     e->vocab = llama_model_get_vocab(model);
     const char * tmpl = llama_model_chat_template(model, nullptr);
     if (tmpl) e->tmpl = tmpl;
+    e->fallback = fallback_template(e->vocab);
+    if (!tmpl) LOGI("no chat template in the model; using the %s format", e->fallback.c_str());
     {
         std::lock_guard<std::mutex> lock(log_mutex);
         e->offload = last_offload;
@@ -614,7 +671,16 @@ char * be_complete(be_engine * e, const char * const * c_roles, const char * con
         char piece[256];
         int32_t len = llama_token_to_piece(e->vocab, tok, piece, sizeof(piece), 0, false);
         if (len > 0) pending.append(piece, len);
-        const size_t ready = complete_utf8_prefix(pending);
+        // A turn marker written as text: the reply ends just before it.
+        const size_t marker = find_turn_marker(pending);
+        if (marker != std::string::npos) {
+            pending.erase(marker);
+            while (!pending.empty() && (pending.back() == '\n' || pending.back() == ' ')) pending.pop_back();
+            LOGI("stopped at a chat marker the model wrote as text");
+            break;
+        }
+        // Text that could be the start of a marker waits for the next piece.
+        const size_t ready = complete_utf8_prefix(pending.substr(0, pending.size() - marker_prefix_at_end(pending)));
         if (ready > 0) {
             const bool go_on = emit(pending.substr(0, ready));
             pending.erase(0, ready);

@@ -179,6 +179,11 @@ async function ensureLoaded(name, ctx, gpu) {
   return engine;
 }
 
+// Chat turn markers a reply must never contain (see native/llama/engine:
+// TURN_MARKERS). "<end_of_" also catches made-up ones like "<end_of_assistant>".
+export const TURN_MARKERS = ['<|im_start|>', '<|im_end|>', '<start_of_turn>', '<end_of_turn>', '<|eot_id|>', '<|start_header_id|>',
+  '<|end_header_id|>', '<|endoftext|>', '<|user|>', '<|assistant|>', '<|end|>', '<end_of_'];
+
 export const onDevice = {
   async listModels() {
     return (await listDownloaded()).map((m) => m.name);
@@ -196,7 +201,10 @@ export const onDevice = {
       const textMessages = req.messages.map(({ role, content }) => ({ role, content: content || '(a picture)' }));
       const history = fitToContext(textMessages, req.system, ctx, Math.min(replyTokens, Math.floor(ctx / 4)));
       const messages = req.system ? [{ role: 'system', content: req.system }, ...history] : history;
-      const params = { messages, stream: true, max_tokens: replyTokens, abortSignal: signal };
+      // A model that writes a chat marker as text has lost track of the format
+      // and would go on to write the user's next message itself: stop there
+      // (the same markers as the native engine's TURN_MARKERS).
+      const params = { messages, stream: true, max_tokens: replyTokens, stop: TURN_MARKERS, abortSignal: signal };
       if (req.temperature != null && !Number.isNaN(req.temperature)) params.temperature = req.temperature;
 
       let text = '';
