@@ -79,23 +79,32 @@ test('the check reads the release\'s version.json', async () => {
 });
 
 test('version.json: each file\'s SHA-256 and size, and what\'s new since the last one', () => {
+  // Its own small history, so it works in a shallow checkout (CI) too.
+  const repo = tmp();
+  const git = (...a) => execFileSync('git', a, { cwd: repo, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).trim();
+  git('init', '-q');
+  for (const msg of ['First release', 'Fix the spacing', 'Add the updater']) git('commit', '-q', '--allow-empty', '-m', msg);
+  const script = path.join(ROOT, 'scripts', 'release-manifest.js');
+  const run = (...a) => execFileSync('node', [script, ...a], { cwd: repo, stdio: 'pipe' });
+
   const dir = tmp();
   fs.writeFileSync(path.join(dir, 'Najwa-AI-Plus-android.apk'), 'apk bytes');
   fs.writeFileSync(path.join(dir, 'version.json'), '{"old":true}');
   const prev = path.join(tmp(), 'prev.json');
-  const twoBack = execFileSync('git', ['rev-parse', 'HEAD~2'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  fs.writeFileSync(prev, JSON.stringify({ version: '1.0.1', sha: twoBack }));
-  execFileSync('node', ['scripts/release-manifest.js', '--version', '1.0.2', '--dir', dir, '--prev', prev], { cwd: ROOT, stdio: 'pipe' });
+  fs.writeFileSync(prev, JSON.stringify({ version: '1.0.1', sha: git('rev-parse', 'HEAD~2') }));
+  run('--version', '1.0.2', '--dir', dir, '--prev', prev);
   const m = JSON.parse(fs.readFileSync(path.join(dir, 'version.json'), 'utf8'));
   assert.strictEqual(m.version, '1.0.2');
+  assert.strictEqual(m.sha, git('rev-parse', 'HEAD'));
   assert.deepStrictEqual(m.files, { 'Najwa-AI-Plus-android.apk': { sha256: sha(Buffer.from('apk bytes')), size: 9 } });
-  const subjects = execFileSync('git', ['log', '--no-merges', '--format=%s', `${twoBack}..HEAD`], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
-  assert.deepStrictEqual(m.notes, subjects.slice(0, 12));
-  // No previous one (the first release): the last commit.
-  fs.rmSync(path.join(dir, 'version.json'));
-  execFileSync('node', ['scripts/release-manifest.js', '--version', '1.0.3', '--dir', dir], { cwd: ROOT, stdio: 'pipe' });
-  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'version.json'), 'utf8')).notes.length, 1);
-  assert.throws(() => execFileSync('node', ['scripts/release-manifest.js', '--version', 'latest', '--dir', dir], { cwd: ROOT, stdio: 'pipe' }));
+  assert.deepStrictEqual(m.notes, ['Add the updater', 'Fix the spacing']);
+  // No previous one (the first release), or one not in this history: the last commit.
+  run('--version', '1.0.3', '--dir', dir);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'version.json'), 'utf8')).notes, ['Add the updater']);
+  fs.writeFileSync(prev, JSON.stringify({ version: '1.0.1', sha: 'a'.repeat(40) }));
+  run('--version', '1.0.4', '--dir', dir, '--prev', prev);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'version.json'), 'utf8')).notes, ['Add the updater']);
+  assert.throws(() => run('--version', 'latest', '--dir', dir));
 });
 
 // Sent in pieces, like a real download.

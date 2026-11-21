@@ -25,11 +25,12 @@ const sha256 = (file) => new Promise((resolve, reject) => {
   fs.createReadStream(file).on('error', reject).on('data', (d) => h.update(d)).on('end', () => resolve(h.digest('hex')));
 });
 
+// Its output, or null when it fails.
 const git = (...args) => {
   try {
     return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch {
-    return '';
+    return null;
   }
 };
 
@@ -37,7 +38,7 @@ const git = (...args) => {
 // the last commit's when there isn't one to compare with.
 function notesSince(prevSha) {
   const ok = /^[0-9a-f]{7,40}$/.test(prevSha || '') && git('cat-file', '-e', `${prevSha}^{commit}`) === '' && git('merge-base', '--is-ancestor', prevSha, 'HEAD') === '';
-  const out = ok ? git('log', '--no-merges', '--format=%s', `${prevSha}..HEAD`) : git('log', '-1', '--format=%s');
+  const out = (ok ? git('log', '--no-merges', '--format=%s', `${prevSha}..HEAD`) : git('log', '-1', '--format=%s')) || '';
   return out.split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 12);
 }
 
