@@ -257,21 +257,51 @@ function splitThinking(text) {
   return { thinking: m[1].trim(), done: !!m[2], answer: text.slice(m[0].length) };
 }
 
+// Which way a reply reads (Arabic and other right-to-left scripts, or left to
+// right), by what most of its letters are, not its first one: an Arabic
+// paragraph that starts with "Turkish Airlines" or "HPN" still reads right to
+// left. Code, inline code and link addresses don't count. The reply as a whole
+// sets the side its tables and lists start on; a paragraph or heading that's
+// clearly in the other language (three quarters of its letters) goes its own
+// way, and a mixed one follows the reply. A list's items and a table's cells
+// all go the list's or table's way, so bullets, numbers and columns line up.
+const RTL_LETTER = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/g;
+const LTR_LETTER = /[A-Za-z\u00C0-\u02AF\u0370-\u052F]/g;
+function letterShare(el) {
+  let text = '';
+  const it = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement && n.parentElement.closest('code, pre') ? 2 : 1) });
+  for (let n = it.nextNode(); n; n = it.nextNode()) text += n.nodeValue;
+  const rtl = (text.match(RTL_LETTER) || []).length;
+  const ltr = (text.match(LTR_LETTER) || []).length;
+  return rtl + ltr ? rtl / (rtl + ltr) : null;
+}
+function layoutDirection(wrap) {
+  const whole = letterShare(wrap);
+  const base = whole != null && whole >= 0.4 ? 'rtl' : 'ltr';
+  wrap.setAttribute('dir', base);
+  const own = (el, fallback) => {
+    const share = letterShare(el);
+    return share == null ? fallback : share >= 0.75 ? 'rtl' : share <= 0.25 ? 'ltr' : fallback;
+  };
+  for (const group of wrap.querySelectorAll('ul, ol, table')) {
+    const parent = group.parentElement && group.parentElement.closest('[dir]');
+    const d = own(group, parent && parent !== wrap ? parent.getAttribute('dir') : base);
+    group.setAttribute('dir', d);
+    for (const part of group.querySelectorAll(group.tagName === 'TABLE' ? 'th, td' : ':scope > li')) part.setAttribute('dir', d);
+  }
+  for (const block of wrap.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote')) {
+    if (block.closest('li, td, th')) continue;   // goes its list's or table's way
+    const around = block.parentElement && block.parentElement.closest('[dir]');
+    block.setAttribute('dir', own(block, around ? around.getAttribute('dir') : base));
+  }
+}
+
 function renderMarkdown(text) {
   const html = DOMPurify.sanitize(marked.parse(text || ''), REPLY_HTML);
   // What a model wrote: never translated (see i18n.js).
   const wrap = h('div', { translate: 'no' });
   wrap.innerHTML = html;
-  // Arabic (and other right-to-left) paragraphs read right to left, each on
-  // its own, so a mixed reply lays out naturally. Code stays left to right.
-  for (const block of wrap.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th')) block.setAttribute('dir', 'auto');
-  // A list goes the way of its first letter, so an Arabic list keeps the room
-  // for its numbers and bullets on the right. ("auto" can't do it: it skips
-  // the items, which have their own direction.)
-  for (const list of wrap.querySelectorAll('ul, ol')) {
-    const first = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]|[A-Za-z\u00C0-\u02AF\u0370-\u052F]/.exec(list.textContent);
-    list.setAttribute('dir', first && /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/.test(first[0]) ? 'rtl' : 'ltr');
-  }
+  layoutDirection(wrap);
   // Pictures from the internet become links the reader can choose to open.
   for (const img of wrap.querySelectorAll('img')) {
     const inline = img.getAttribute('data-inline');
@@ -1046,7 +1076,7 @@ function statsBadge(st) {
     // How much of the conversation the model could see.
     st.messagesSent != null && st.messagesTotal
       ? `The model saw ${Math.min(st.messagesSent, st.messagesTotal)} of ${st.messagesTotal} messages in this chat` +
-        (st.chatTokens && st.contextSize ? ` (${st.chatTokens.toLocaleString()} of ${st.contextSize.toLocaleString()} tokens of its memory)` : '') +
+        (st.chatTokens && st.contextSize ? ` (${st.chatTokens.toLocaleString(I18n.locale())} of ${st.contextSize.toLocaleString(I18n.locale())} tokens of its memory)` : '') +
         (st.messagesSent < st.messagesTotal ? '. Older messages didn\'t fit: raise "Memory for the conversation" in Settings → Models & providers to include more.' : '')
       : null
   ].filter(Boolean).join('\n');
@@ -1311,7 +1341,7 @@ async function openReplays(chat) {
     toast('The agent hasn\'t worked in this chat yet (or its runs were before replays).');
     return;
   }
-  const when = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const when = (iso) => new Date(iso).toLocaleString(I18n.locale(), { dateStyle: 'medium', timeStyle: 'short' });
   const close = openModal({
     title: 'Replay the agent\'s runs',
     body: h('div', { class: 'replay-list' }, ...runs.map((r) => h('button', {
@@ -1384,7 +1414,7 @@ async function playRun(id) {
     wide: true,
     onClose: stop,
     body: h('div', {},
-      h('p', { class: 'help', text: `${new Date(run.startedAt).toLocaleString()} · ${displayModel(run.model)} · ${run.project} · ${run.seconds}s` }),
+      h('p', { class: 'help', text: `${new Date(run.startedAt).toLocaleString(I18n.locale())} · ${displayModel(run.model)} · ${run.project} · ${run.seconds}s` }),
       h('div', { class: 'replay-bar' }, play, slider, count),
       out),
     buttons: [{
@@ -2132,7 +2162,7 @@ async function addPictures(files) {
       continue;
     }
     attached.push(r.file);
-    if (r.file.cut) toast(`${r.file.name} is long: only its first ${AttachFiles.MAX_CHARS.toLocaleString()} characters are attached.`, 6000);
+    if (r.file.cut) toast(`${r.file.name} is long: only its first ${AttachFiles.MAX_CHARS.toLocaleString(I18n.locale())} characters are attached.`, 6000);
   }
   drawPictures();
 }
@@ -2244,7 +2274,7 @@ function onVoiceEvent(evt) {
   }
   if (evt.partial != null) {
     if (V.dictating && !V.understanding) {
-      el.input.value = V.dictBase + evt.partial;
+      el.input.value = I18n.latinDigits(V.dictBase + evt.partial);
       autoGrow();
     }
   }
@@ -2276,7 +2306,7 @@ async function toggleDictation() {
   if (session !== V.dictSession) return;
   V.dictating = false;
   V.understanding = false;
-  el.input.value = failed ? V.dictBase.trimEnd() : V.dictBase + (text || '');
+  el.input.value = I18n.latinDigits(failed ? V.dictBase.trimEnd() : V.dictBase + (text || ''));
   if (failed && !V.relisten) toast(errorText(failed), 7000);
   else if (!failed && !text && !V.dictBase && !V.relisten) toast(`Didn't catch that. ${S.info.mobile ? 'Tap' : 'Click'} the mic and try again.`);
   autoGrow();
@@ -2890,7 +2920,7 @@ function historyFor(chat, uptoIndex, model) {
 }
 
 async function send() {
-  const text = el.input.value.trim();
+  const text = I18n.latinDigits(el.input.value.trim());   // Western digits only (see i18n.js)
   const images = pictures.slice();
   const files = attached.slice();
   if (!text && !images.length && !files.length) return;
@@ -3338,7 +3368,7 @@ function memoryBox(onCleanup, field, bind, s) {
   const count = h('div', { class: 'help memory-count' });
   const update = () => {
     const n = s.memory.length;
-    count.textContent = `${n.toLocaleString()} / ${MEMORY_LIMIT.toLocaleString()} characters` +
+    count.textContent = `${n.toLocaleString(I18n.locale())} / ${MEMORY_LIMIT.toLocaleString(I18n.locale())} characters` +
       (n > MEMORY_LIMIT ? ' · longer memory leaves less room for the conversation; it is tidied up the next time something is remembered' : '');
     count.classList.toggle('over', n > MEMORY_LIMIT);
   };
@@ -4788,11 +4818,12 @@ function bindEvents() {
       return;
     }
     if (evt.type !== 'delta') return;
+    const piece = I18n.latinDigits(evt.text);   // Western digits only (see i18n.js)
     if (r.prefix != null) {
-      r.raw += evt.text;
+      r.raw += piece;
       r.msg.content = r.prefix + continuationText(r.raw);
     } else {
-      r.msg.content += evt.text;
+      r.msg.content += piece;
     }
     scheduleMessageRender(r.chat, r.msg);
     voiceReplyUpdated(r.msg);

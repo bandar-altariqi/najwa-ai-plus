@@ -102,6 +102,37 @@ const srv = http.createServer((req, res) => {
   out(`the message box grows with its text, up to 240px (${Math.round(h1)} → ${Math.round(h2)} → ${Math.round(h3)}), no inline height`, h2 > h1 + 40 && h3 <= 241 && h3 > h2 && await page.evaluate(() => !document.getElementById('input').style.height));
   out('the chat says aria-busy=false when nothing is streaming', await page.evaluate(() => document.getElementById('messages').getAttribute('aria-busy') === 'false'));
 
+  // --- Western digits only: typed, pasted, and in what's shown (models' replies too)
+  await page.evaluate(() => { document.getElementById('input').value = ''; });
+  await page.click('#input');
+  await page.keyboard.type('عندي ٣ أسئلة و ۴ ملفات، ٢٫٥٪');
+  const typed = await page.evaluate(() => { const i = document.getElementById('input'); return { v: i.value, at: i.selectionStart }; });
+  out(`Arabic digits typed in the message box become 0-9, cursor kept (${JSON.stringify(typed)})`, typed.v === 'عندي 3 أسئلة و 4 ملفات، 2.5%' && typed.at === typed.v.length);
+  const shown = await page.evaluate(async () => {
+    const p = h('p', { text: 'الرد: ١٢٣ و ۷۸' });
+    const code = h('pre', {}, h('code', { text: 'x = ٤٢' }));
+    el.messages.append(p, code);
+    await new Promise((r) => setTimeout(r, 50));
+    p.firstChild.nodeValue += ' ثم ٩';   // a reply still being written
+    await new Promise((r) => setTimeout(r, 50));
+    const out = [p.textContent, code.textContent];
+    p.remove(); code.remove();
+    return out;
+  });
+  out(`…and on screen, in replies and code too (${JSON.stringify(shown)})`, shown[0] === 'الرد: 123 و 78 ثم 9' && shown[1] === 'x = 42');
+  await page.evaluate(() => { document.getElementById('input').value = ''; });
+
+  // --- a reply's direction: by most of its letters, not its first one
+  const dirs = await page.evaluate(() => {
+    const w = renderMarkdown('| الرحلة | المدة |\n|---|---|\n| RUH→JFK ذهاب | ٢٩ س |\n\n- **HPN** مطار يتطلب تغيير IAD↔DCA تجاهله تماماً\n- **LGA** مطار محدود الرحلات\n\n**Turkish Airlines** بـ 1,154$ ذهاب من الرياض إلى نيويورك\n\n`kayak.com/flights/RUH-NYC` من الزر أعلى الصفحة\n\nAn English paragraph stays left to right.\n\n1. First step');
+    const d = (sel) => [...w.querySelectorAll(sel)].map((e) => e.getAttribute('dir')).join(',');
+    return { reply: w.getAttribute('dir'), table: d('table'), cells: d('th, td'), list: d('ul'), items: d('ul > li'), paras: d('p'), ol: d('ol, ol > li') };
+  });
+  out(`an Arabic reply reads right to left, mixed lines and all; English parts left to right (${JSON.stringify(dirs)})`,
+    dirs.reply === 'rtl' && dirs.table === 'rtl' && dirs.cells === 'rtl,rtl,rtl,rtl' && dirs.list === 'rtl' && dirs.items === 'rtl,rtl' && dirs.paras === 'rtl,rtl,ltr' && dirs.ol === 'ltr,ltr');
+  const en = await page.evaluate(() => { const w = renderMarkdown('Flights from **الرياض** to New York, with a short note in Arabic: مرحبا.\n\n- one\n- two'); return [w.getAttribute('dir'), w.querySelector('p').getAttribute('dir'), w.querySelector('ul').getAttribute('dir')].join(','); });
+  out(`an English reply with an Arabic word stays left to right (${en})`, en === 'ltr,ltr,ltr');
+
   // --- phone: windows are sheets from the bottom
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => { document.getElementById('input').value = ''; });

@@ -124,9 +124,33 @@
     return /^ar\b/i.test(device) ? 'ar' : 'en';
   }
 
-  // Dates and times in the app's language (Western digits, the usual calendar).
+  // Western digits only, everywhere in the app (the owner's choice): Arabic-
+  // Indic (٠-٩) and Persian (۰-۹) digits, and the Arabic decimal point,
+  // thousands mark and percent, become 0-9 . , %. One character for one, so
+  // it's safe on pieces of a reply and keeps a text box's cursor in place.
+  const EASTERN = /[\u0660-\u066C\u06F0-\u06F9]/;
+  const EASTERN_ALL = /[\u0660-\u066C\u06F0-\u06F9]/g;
+  const toLatin = (c) => {
+    const n = c.charCodeAt(0);
+    if (n <= 0x0669) return String(n - 0x0660);
+    if (n >= 0x06F0) return String(n - 0x06F0);
+    return n === 0x066A ? '%' : n === 0x066B ? '.' : ',';
+  };
+  function latinDigits(text) {
+    return typeof text === 'string' && EASTERN.test(text) ? text.replace(EASTERN_ALL, toLatin) : text;
+  }
+
+  // Dates, times and numbers in the app's language, always with Western
+  // digits (and the usual calendar), whatever the device's own setting.
   function locale() {
-    return lang === 'ar' ? 'ar-u-ca-gregory-nu-latn' : undefined;
+    if (lang === 'ar') return 'ar-u-ca-gregory-nu-latn';
+    const device = typeof navigator !== 'undefined' ? String(navigator.language || '') : '';
+    const base = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(device) && !/-u-/i.test(device) ? device : 'en';
+    try {
+      return Intl.getCanonicalLocales(`${base}-u-nu-latn`)[0];
+    } catch {
+      return 'en-u-nu-latn';
+    }
   }
 
   // ---- the screen -----------------------------------------------------------
@@ -199,10 +223,40 @@
     }
   }
 
+  // Western digits in every text on screen, in any language, what people and
+  // models wrote included (latinDigits).
+  function digitsIn(node) {
+    if (node.nodeType === 3) {
+      const v = node.nodeValue;
+      if (EASTERN.test(v)) node.nodeValue = latinDigits(v);
+      return;
+    }
+    if (node.nodeType !== 1 || !EASTERN.test(node.textContent || '')) return;
+    const it = node.ownerDocument.createTreeWalker(node, 4 /* text */);
+    for (let n = it.nextNode(); n; n = it.nextNode()) if (EASTERN.test(n.nodeValue)) n.nodeValue = latinDigits(n.nodeValue);
+  }
+
+  // …and in text boxes as they're typed in (or pasted into).
+  function digitsTyped(e) {
+    const box = e.target;
+    if (!box || e.isComposing || !('value' in box) || typeof box.value !== 'string' || !EASTERN.test(box.value)) return;
+    if (box.tagName === 'INPUT' && !/^(text|search|url|email|tel|number|password|)$/i.test(box.type || '')) return;
+    let start = null;
+    let end = null;
+    try {
+      start = box.selectionStart;
+      end = box.selectionEnd;
+    } catch { /* a box without a cursor */ }
+    box.value = latinDigits(box.value);
+    try {
+      if (start != null) box.setSelectionRange(start, end);
+    } catch { /* a box without a cursor */ }
+  }
+
   function onMutations(list) {
     for (const m of list) {
-      if (m.type === 'childList') for (const n of m.addedNodes) walk(n);
-      else if (m.type === 'characterData') { if (!skipped(m.target.parentElement)) doText(m.target); }
+      if (m.type === 'childList') for (const n of m.addedNodes) { digitsIn(n); walk(n); }
+      else if (m.type === 'characterData') { digitsIn(m.target); if (!skipped(m.target.parentElement)) doText(m.target); }
       else if (m.type === 'attributes' && !attrsSkipped(m.target)) doAttrs(m.target);
     }
   }
@@ -210,7 +264,10 @@
   /** Keeps everything under `el` (the whole page) in the app's language. */
   function watch(el) {
     if (observer || typeof MutationObserver === 'undefined') return;
+    digitsIn(el);
     walk(el);
+    el.ownerDocument.addEventListener('input', digitsTyped, true);
+    el.ownerDocument.addEventListener('compositionend', digitsTyped, true);
     observer = new MutationObserver(onMutations);
     observer.observe(el, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
   }
@@ -237,7 +294,7 @@
     try { return root.localStorage.getItem(STORE_KEY) || ''; } catch { return ''; }
   }
 
-  const api = { t, resolve, locale, setLanguage, watch, remembered, lang: () => lang, LANGUAGES, size: () => exact.size + patterns.length };
+  const api = { t, resolve, locale, latinDigits, setLanguage, watch, remembered, lang: () => lang, LANGUAGES, size: () => exact.size + patterns.length };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.I18n = api;
 })(typeof window !== 'undefined' ? window : globalThis);
