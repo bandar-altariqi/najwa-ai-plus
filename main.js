@@ -22,7 +22,7 @@ const { startRemoteServer, localAddresses } = require('./src/remote-server');
 const { createVoice } = require('./src/voice-desktop');
 const { readLink } = require('./src/link-reader');
 const { chatWithTools, combineTools, TOOL_KINDS } = require('./src/tool-chat');
-const { connectorHub, connectorsNote, urlOf } = require('./src/connectors');
+const { connectorHub, connectorsNote, capabilitiesNote, urlOf } = require('./src/connectors');
 const { httpTransport } = require('./src/mcp-client');
 const { stdioTransport } = require('./src/mcp-stdio');
 const { localApprovals } = require('./src/local-approvals');
@@ -497,6 +497,8 @@ async function runChatInner(providerId, req, onDelta, signal, onInfo) {
         sets.push(set);
         system = connectorsNote(system, set);
       }
+      // No project folder: say how to get what these tools can't do.
+      if (!agentSpec) system = capabilitiesNote(system, 'computer');
       const tools = combineTools(sets);
       if (tools.defs.length) {
         const result = await chatWithTools({ kind: TOOL_KINDS[providerId], cfg, req: { ...request, system }, onDelta, signal, onInfo, tools });

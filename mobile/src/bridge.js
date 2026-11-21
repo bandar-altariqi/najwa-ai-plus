@@ -15,7 +15,7 @@ import { PROVIDERS, hermesProvider, normalizeMessages } from '../../src/provider
 import { makeNativeFetch } from '../../src/native-fetch.js';
 import { readLink } from '../../src/link-reader.js';
 import { chatWithTools, combineTools, TOOL_KINDS } from '../../src/tool-chat.js';
-import { connectorHub, connectorsNote, urlOf } from '../../src/connectors.js';
+import { connectorHub, connectorsNote, capabilitiesNote, urlOf } from '../../src/connectors.js';
 import { httpTransport } from '../../src/mcp-client.js';
 import { localApprovals } from '../../src/local-approvals.js';
 import { textBrowser, browsingNote } from '../../src/browser-tools.js';
@@ -500,6 +500,8 @@ window.balimda = {
               sets.push(set);
               system = connectorsNote(system, set);
             }
+            // Say how to get what these tools can't do (commands, programs: on a computer).
+            system = capabilitiesNote(system, 'phone');
             const tools = combineTools(sets);
             if (tools.defs.length) {
               const result = await chatWithTools({

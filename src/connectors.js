@@ -198,4 +198,14 @@ function connectorsNote(system, set) {
   return system ? `${system}\n\n${lines.join('\n')}` : lines.join('\n');
 }
 
-module.exports = { connectorHub, connectorsNote, resultOf, GITHUB_URL, urlOf };
+// Added in chats with tools but no project folder: what to tell a user who asks
+// for something these tools can't do (run commands, install a program, add an
+// MCP server), instead of only saying no. `place`: 'computer' or 'phone'.
+function capabilitiesNote(system, place) {
+  const note = place === 'phone'
+    ? 'If the user asks for something your tools in this chat can\'t do (run commands or code, install software, add tools or an MCP server), don\'t just say no: tell them how to get it in Najwa AI Plus. An MCP server on the internet: Settings → Connectors → "Add by address" (its URL), then you can use its tools here. One that runs as a program (for example "npx -y some-mcp"), and running commands or code, need a computer with Najwa AI Plus: add it there under Settings → Connectors → "Add a program on this computer", or give the chat a project folder (📁 Project at the top); this phone can then choose the computer\'s folder with 📁 Project.'
+    : 'If the user asks for something your tools in this chat can\'t do (run commands or code, install software, add tools or an MCP server), don\'t just say no: tell them how to get it in Najwa AI Plus. To work in files and run commands, they give this chat a project folder (📁 Project at the top). To add an MCP server\'s tools: Settings → Connectors → "Add a program on this computer" for one started with a command (Command: npx, Arguments: -y and the package, one per line), or "Add by address" for one on the internet (its URL). Its tools then work in chats.';
+  return system ? `${system}\n\n${note}` : note;
+}
+
+module.exports = { connectorHub, connectorsNote, capabilitiesNote, resultOf, GITHUB_URL, urlOf };
