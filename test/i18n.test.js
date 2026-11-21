@@ -58,7 +58,7 @@ test('every Arabic entry is still the English the app shows', () => {
   const root = path.join(__dirname, '..');
   const files = ['renderer/app.js', 'renderer/index.html', 'renderer/attach-files.js', 'mobile/src/bridge.js', 'mobile/src/on-device.js',
     'mobile/src/native-engine.js', 'src/providers.js', 'src/remote.js', 'src/reply-hub.js', 'src/remote-server.js', 'src/storage.js', 'main.js',
-    'src/agent/tools.js', 'src/agent/git.js', 'src/agent/budget.js', 'src/agent/hooks.js', 'src/agent/homelab.js'];
+    'src/agent/tools.js', 'src/agent/git.js', 'src/agent/budget.js', 'src/agent/hooks.js', 'src/agent/homelab.js', 'src/connector-installer.js'];
   const src = files.map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n').replace(/\\'/g, '\'').replace(/\\"/g, '"').replace(/\\n/g, '\n');
   const missing = [];
   for (const key of Object.keys(AR)) {

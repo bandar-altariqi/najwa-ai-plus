@@ -200,11 +200,17 @@ function connectorsNote(system, set) {
 
 // Added in chats with tools but no project folder: what to tell a user who asks
 // for something these tools can't do (run commands, install a program, add an
-// MCP server), instead of only saying no. `place`: 'computer' or 'phone'.
-function capabilitiesNote(system, place) {
+// MCP server), instead of only saying no. `place`: 'computer' or 'phone';
+// `canAdd`: the model has add_connector (src/connector-installer.js).
+function capabilitiesNote(system, place, { canAdd = false } = {}) {
+  const add = canAdd
+    ? (place === 'phone'
+      ? ' To add an MCP server that\'s on the internet (an https address), use add_connector yourself: find its official page first; the user approves it on a card. One that runs as a program needs a computer with Najwa AI Plus: tell the user to ask there.'
+      : ' To add an MCP server\'s tools, use add_connector yourself (a program started with npx, uvx, bunx or pnpx, or an https address): find its official page or package first; the user approves it on a card, and its tools are yours right after. Keys it needs, the user adds in Settings → Connectors.')
+    : '';
   const note = place === 'phone'
-    ? 'If the user asks for something your tools in this chat can\'t do (run commands or code, install software, add tools or an MCP server), don\'t just say no: tell them how to get it in Najwa AI Plus. An MCP server on the internet: Settings → Connectors → "Add by address" (its URL), then you can use its tools here. One that runs as a program (for example "npx -y some-mcp"), and running commands or code, need a computer with Najwa AI Plus: add it there under Settings → Connectors → "Add a program on this computer", or give the chat a project folder (📁 Project at the top); this phone can then choose the computer\'s folder with 📁 Project.'
-    : 'If the user asks for something your tools in this chat can\'t do (run commands or code, install software, add tools or an MCP server), don\'t just say no: tell them how to get it in Najwa AI Plus. To work in files and run commands, they give this chat a project folder (📁 Project at the top). To add an MCP server\'s tools: Settings → Connectors → "Add a program on this computer" for one started with a command (Command: npx, Arguments: -y and the package, one per line), or "Add by address" for one on the internet (its URL). Its tools then work in chats.';
+    ? `If the user asks for something your tools in this chat can't do (run commands or code, install software, add tools or an MCP server), don't just say no.${add} Otherwise tell them how to get it in Najwa AI Plus. An MCP server on the internet: Settings → Connectors → "Add by address" (its URL). One that runs as a program (for example "npx -y some-mcp"), and running commands or code, need a computer with Najwa AI Plus: add it there under Settings → Connectors → "Add a program on this computer", or give the chat a project folder (📁 Project at the top); this phone can then choose the computer's folder with 📁 Project.`
+    : `If the user asks for something your tools in this chat can't do (run commands or code, install software, add tools or an MCP server), don't just say no.${add} Otherwise tell them how to get it in Najwa AI Plus. To work in files and run commands, they give this chat a project folder (📁 Project at the top). To add an MCP server's tools themselves: Settings → Connectors → "Add a program on this computer" for one started with a command (Command: npx, Arguments: -y and the package, one per line), or "Add by address" for one on the internet (its URL).`;
   return system ? `${system}\n\n${note}` : note;
 }
 

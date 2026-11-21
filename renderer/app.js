@@ -1417,7 +1417,7 @@ function agentEvent(chat, msg, evt) {
   } else if (evt.kind === 'approval') {
     msg.approvals = msg.approvals || [];
     const origin = evt.origin && evt.origin.id ? { id: String(evt.origin.id), name: String(evt.origin.name || 'another device').slice(0, 60), computer: !!evt.origin.computer } : null;
-    const askKind = ['edit', 'command', 'budget'].includes(evt.askKind) ? evt.askKind : null;
+    const askKind = ['edit', 'command', 'budget', 'install'].includes(evt.askKind) ? evt.askKind : null;
     msg.approvals.push({ runId: evt.runId, approvalId: evt.approvalId || null, generation: Number.isInteger(evt.generation) ? evt.generation : null, connectorId: evt.connectorId ? String(evt.connectorId) : null, origin, title: evt.title ? String(evt.title).slice(0, 200) : null, command: String(evt.command || '').slice(0, askKind ? 12000 : 2000), description: String(evt.description || '').slice(0, askKind ? 1500 : 500), choices: Array.isArray(evt.choices) && evt.choices.length ? evt.choices : ['once', 'deny'], askKind, state: 'pending' });
     if (askKind) agentSays(chat, I18n.lang() === 'ar' ? `الوكيل يستأذنك: ${evt.title || ''}` : `The agent asks: ${evt.title || 'for your permission'}`);
     if (S.current !== chat || document.hidden) {
@@ -1531,7 +1531,7 @@ async function answerFromNotification({ chatId, runId, choice } = {}) {
 // What the agent did (tools) and what it asked (approvals), above its answer.
 // A command or diff on an approval card: changed lines coloured.
 function approvalText(a) {
-  if (!a.askKind || a.askKind === 'budget') return h('pre', { class: 'approval-command', dir: 'ltr', text: a.command });
+  if (!a.askKind || a.askKind === 'budget' || a.askKind === 'install') return h('pre', { class: 'approval-command', dir: 'ltr', translate: 'no', text: a.command });
   const pre = h('pre', { class: 'approval-command diff', dir: 'ltr', translate: 'no' });
   for (const line of a.command.split('\n')) {
     const cls = /^\+(?!\+\+ )/.test(line) ? 'add' : /^-(?!-- )/.test(line) ? 'del' : /^@@/.test(line) ? 'hunk' : /^(\+\+\+|---) /.test(line) ? 'file' : '';
@@ -1548,6 +1548,7 @@ function approvalLabel(a, c) {
   if (a.askKind === 'edit' && c === 'session') return 'Allow edits for this chat';
   if (a.askKind === 'command' && c === 'always') return 'Always allow this command';
   if (a.askKind === 'budget') return c === 'deny' ? 'Stop' : 'Keep going';
+  if (a.askKind === 'install') return c === 'deny' ? 'Don\'t add' : 'Add';
   return APPROVAL_LABELS[c];
 }
 
@@ -3394,6 +3395,8 @@ async function onSyncEvent(evt) {
     const fresh = await api.settings.get();
     const computersChanged = JSON.stringify(fresh.computers) !== JSON.stringify(S.settings.computers);
     for (const k of ['assistants', 'memory', 'memoryEnabled', 'autoMemory', 'recallChats', 'computers', 'sharedModifiedAt']) S.settings[k] = fresh[k];
+    // A connector the model added (src/connector-installer.js), approved by the user.
+    if (evt.connectors) S.settings.connectors = fresh.connectors;
     renderSelectors();
     if (computersChanged && S.settings.providers.computer) loadModels();
     for (const draw of memoryViews) draw();

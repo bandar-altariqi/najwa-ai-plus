@@ -16,6 +16,7 @@ import { makeNativeFetch } from '../../src/native-fetch.js';
 import { readLink } from '../../src/link-reader.js';
 import { chatWithTools, combineTools, TOOL_KINDS } from '../../src/tool-chat.js';
 import { connectorHub, connectorsNote, capabilitiesNote, urlOf } from '../../src/connectors.js';
+import { connectorInstaller } from '../../src/connector-installer.js';
 import { httpTransport } from '../../src/mcp-client.js';
 import { localApprovals } from '../../src/local-approvals.js';
 import { textBrowser, browsingNote } from '../../src/browser-tools.js';
@@ -493,16 +494,37 @@ window.balimda = {
               system = browsingNote(system, !!Browse);
             }
             const mine = req.connectors ? phoneConnectors((await (await ready).getSettings()).connectors) : [];
+            const ask = approvals.asker(onInfo, controller.signal, await phoneOrigin());
             if (mine.length) {
               const set = await connectorsHub.toolset(mine, {
-                approve: approvals.asker(onInfo, controller.signal, await phoneOrigin()), allowed: approvals.allowedFor(req.chatId), signal: controller.signal
+                approve: ask, allowed: approvals.allowedFor(req.chatId), signal: controller.signal
               });
               sets.push(set);
               system = connectorsNote(system, set);
             }
+            // The model can add a connector by its address (src/connector-installer.js).
+            let tools = null;
+            if (req.connectors) {
+              sets.push(connectorInstaller({
+                place: 'phone',
+                existing: async () => (await (await ready).getSettings()).connectors || [],
+                save: async (list) => {
+                  const storage = await ready;
+                  const s = await storage.getSettings();
+                  s.connectors = list;
+                  await storage.saveSettings(s);
+                  for (const cb of syncListeners) cb({ type: 'changed', chats: [], deleted: [], settings: true, connectors: true });
+                },
+                test: (c) => connectorsHub.test(c),
+                approve: ask,
+                onAdded: async (c) => {
+                  if (tools) tools.add(await connectorsHub.toolset([c], { approve: ask, allowed: approvals.allowedFor(req.chatId), signal: controller.signal }));
+                }
+              }));
+            }
             // Say how to get what these tools can't do (commands, programs: on a computer).
-            system = capabilitiesNote(system, 'phone');
-            const tools = combineTools(sets);
+            system = capabilitiesNote(system, 'phone', { canAdd: !!req.connectors });
+            tools = combineTools(sets);
             if (tools.defs.length) {
               const result = await chatWithTools({
                 kind: TOOL_KINDS[req.provider], cfg, req: { ...request, system }, onDelta, signal: controller.signal, onInfo, tools

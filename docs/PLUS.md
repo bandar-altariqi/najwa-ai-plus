@@ -123,6 +123,14 @@ going in the background (a foreground service on Android). When the agent asks
 while the chat isn't on screen, the phone shows a notification that opens the
 chat. Not yet tried on a real phone.
 
+The model adds connectors itself (`src/connector-installer.js`): asked for
+something an MCP server does, it calls `add_connector`. A card shows exactly
+what will run and where it's from; only **Add** adds it (never automatic, in any
+mode). It's started to check it works, saved in Settings → Connectors, and its
+tools work in the same reply. Only a package launcher (npx, uvx, bunx, pnpx)
+with plain arguments, or an https address; the phone adds by address only. Keys
+are added by the user in Settings, never in the chat.
+
 ## What's next
 
 1. **Try it on real devices**: the Plus phone app with a computer (Android APK

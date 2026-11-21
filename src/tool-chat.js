@@ -388,7 +388,14 @@ function combineTools(sets) {
   const live = sets.filter((t) => t && t.defs && t.defs.length);
   const owner = (name) => live.find((t) => (t.owns ? t.owns(name) : t.defs.some((d) => d.name === name)));
   return {
-    defs: live.flatMap((t) => t.defs),
+    // Read on every step, so tools added during the reply (add()) are offered next.
+    get defs() {
+      return live.flatMap((t) => t.defs);
+    },
+    // More tools for the rest of this reply (a connector the model just added).
+    add(set) {
+      if (set && set.defs && set.defs.length && !live.includes(set)) live.push(set);
+    },
     describe: (call) => (owner(call.name) ? owner(call.name).describe(call) : `Using ${call.name}`),
     emoji: (call) => {
       const t = owner(call.name);

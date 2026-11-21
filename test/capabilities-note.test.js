@@ -34,6 +34,6 @@ test('the note says where commands and MCP servers come from, on a computer and 
 });
 
 test('it goes in chats with tools but no project folder, on the computer and the phone', () => {
-  assert.match(read('main.js'), /if \(!agentSpec\) system = capabilitiesNote\(system, 'computer'\);/);
-  assert.match(read('mobile/src/bridge.js'), /system = capabilitiesNote\(system, 'phone'\);/);
+  assert.match(read('main.js'), /if \(!agentSpec\) system = capabilitiesNote\(system, 'computer', \{ canAdd: !!req\.connectors \}\);/);
+  assert.match(read('mobile/src/bridge.js'), /system = capabilitiesNote\(system, 'phone', \{ canAdd/);
 });
