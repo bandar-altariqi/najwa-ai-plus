@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NetPlugin.class);
         registerPlugin(BrowsePlugin.class);
         registerPlugin(StorePlugin.class);
+        registerPlugin(UpdatePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

@@ -4255,6 +4255,18 @@ function openSettings(tab = 'general') {
         h('p', { class: 'about-by' }, 'Created by ', h('strong', { text: AUTHOR })),
         h('p', { class: 'help', text: COPYRIGHT }),
         h('p', { text: 'Najwa AI is a private AI chat app that remembers every chat. It runs models on your device, on your own computer, or in the cloud. Your chats stay on your device.' }),
+        // Not where a store updates it (S.info.store), or in a browser.
+        api.updates && !S.info.store ? field('Updates', h('div', {},
+          h('div', { class: 'field-row' },
+            h('button', { class: 'btn', text: 'Check for updates', onclick: () => Updates.check({ manual: true }) })),
+          h('label', { class: 'check update-auto' },
+            h('input', { type: 'checkbox', checked: S.settings.checkUpdates !== false, onchange: (e) => {
+              S.settings.checkUpdates = e.target.checked;
+              saveSettings();
+              Updates.start();
+            } }),
+            'Look for updates by itself and tell me')),
+          'When there\'s a new version, Najwa AI Plus asks you first. Update downloads it, checks it and installs it. Your chats and settings stay.') : null,
         // Not in the Google Play build (StoreFlags.support is null there).
         support ? field('Support Najwa AI', h('div', {},
           h('p', { class: 'help', text: 'Najwa AI is made by one person, with no ads, no tracking and no subscriptions. If it helps you, you can support its development.' }),
@@ -4824,6 +4836,115 @@ function bindEvents() {
 // ---------------------------------------------------------------------------
 // start
 
+// ---------------------------------------------------------------------------
+// Updates (Najwa AI Plus): a while after it starts, and every 6 hours, the app
+// looks for a newer version (the release's version.json, src/updates.js). If
+// there is one it says so; Update downloads it, checks it and installs it
+// (the app opens again by itself on a computer; Android shows its own Update
+// screen). The iPhone app opens the download page. Settings → About has
+// "Check for updates" and the setting to stop looking by itself.
+const Updates = (() => {
+  let later = '';         // the version "Later" was tapped for (until the app restarts)
+  let showing = false;
+  let timer = null;
+
+  const pct = (p) => `${Math.round(Math.max(0, Math.min(1, p)) * 100)}%`;
+
+  function offer(u) {
+    if (showing) return;
+    showing = true;
+    const status = h('p', { class: 'help', role: 'status', 'aria-live': 'polite' });
+    const bar = h('progress', { class: 'update-progress', max: 1, value: 0, hidden: true });
+    const body = h('div', {},
+      h('p', { text: `You have version ${u.current}.` }),
+      u.notes && u.notes.length ? h('div', {},
+        h('p', { class: 'help', text: 'What\'s new:' }),
+        h('ul', { class: 'update-notes', translate: 'no' }, u.notes.map((n) => h('li', { text: n })))) : null,
+      u.file ? null : h('p', { class: 'help', text: S.info.platform === 'ios'
+        ? 'The iPhone app can\'t update itself: download the new version and sign it again, as you did before.'
+        : 'This copy can\'t update itself: download the new version from the release page.' }),
+      bar, status);
+    const buttons = () => [...body.closest('dialog').querySelectorAll('.modal-foot .btn')];
+    let stop = null;
+    const install = async () => {
+      buttons().forEach((b) => { b.disabled = true; });
+      bar.hidden = false;
+      bar.removeAttribute('value');   // moving, until the first progress
+      status.textContent = 'Downloading the update…';
+      stop = api.updates.onProgress((p) => {
+        bar.value = p;
+        status.textContent = `Downloading the update… ${pct(p)}`;
+      });
+      try {
+        const r = await api.updates.install();
+        if (r && r.restarting) {
+          status.textContent = 'Installing. Najwa AI Plus will open again in a moment.';
+          return false;
+        }
+        if (r && r.needsPermission) status.textContent = 'Android needs your OK first: allow "Install unknown apps" for Najwa AI Plus on the screen that opened, then come back and tap Update again.';
+        else if (r && r.started) status.textContent = 'Android\'s installer is open: tap Update there. Your chats and settings stay.';
+        else if (r && r.opened) status.textContent = 'The installer is open: finish there, then open Najwa AI Plus again.';
+        bar.hidden = true;
+      } catch (err) {
+        bar.hidden = true;
+        status.textContent = `The update didn't install: ${errorText(err)}`;
+      } finally {
+        if (stop) stop();
+        stop = null;
+      }
+      buttons().forEach((b) => { b.disabled = false; });
+      return false;
+    };
+    const openPage = () => {
+      h('a', { href: u.page, target: '_blank', rel: 'noopener' }).click();
+    };
+    openModal({
+      title: `Najwa AI Plus ${u.version} is out`,
+      body,
+      onClose: () => {
+        showing = false;
+        if (stop) stop();
+      },
+      buttons: [
+        { label: 'Later', onClick: () => { later = u.version; } },
+        u.file ? { label: 'Update', primary: true, onClick: install } : { label: 'Open the download page', primary: true, onClick: openPage }
+      ]
+    });
+  }
+
+  // manual: from Settings → About (says the answer even when there's nothing new).
+  async function check({ manual = false } = {}) {
+    if (!api.updates || (S.info && S.info.store)) {
+      if (manual) toast('This copy of Najwa AI Plus is updated where you got it.');
+      return null;
+    }
+    let u;
+    try {
+      u = await api.updates.check();
+    } catch (err) {
+      if (manual) toast(`Couldn't check for updates: ${errorText(err)}`, 5000);
+      return null;
+    }
+    if (u && u.available) {
+      if (manual || u.version !== later) offer(u);
+    } else if (manual) {
+      toast(u && u.notPackaged ? 'Updates are only for an installed copy of Najwa AI Plus.' : `You have the newest version (${(u && u.current) || S.info.version}).`, 4000);
+    }
+    return u;
+  }
+
+  function start() {
+    clearTimeout(timer);
+    if (!api.updates || S.settings.checkUpdates === false) return;
+    timer = setTimeout(async function tick() {
+      if (S.settings.checkUpdates !== false) await check();
+      timer = setTimeout(tick, 6 * 60 * 60 * 1000);
+    }, 20 * 1000);
+  }
+
+  return { check, start };
+})();
+
 async function init() {
   [S.settings, S.info, S.state, S.sync] = await Promise.all([
     api.settings.get(), api.app.info(), api.state.get(), api.sync ? api.sync.status() : null
@@ -4852,6 +4973,7 @@ async function init() {
   else newChat();
 
   loadModels();
+  Updates.start();
   // Messages left in the queue when the app closed go now, under the usual rules.
   flushAllQueued();
 }

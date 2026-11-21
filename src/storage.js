@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
   autoTitle: true,
   sendOnEnter: true,
   replyStyle: 'sentences',  // how replies appear while written: 'sentences', 'words' or 'whole'
+  checkUpdates: true,  // look for a newer Najwa AI Plus and offer it (renderer/app.js Updates)
   readLinks: true,  // open links in the user's messages and give the model the page's text
   browser: true,    // let models (that can use tools) search and browse the web
   connectors: [],   // services models can use (GitHub…); see src/connectors.js. Not synced.

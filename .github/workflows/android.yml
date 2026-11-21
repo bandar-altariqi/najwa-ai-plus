@@ -26,7 +26,10 @@ jobs:
       # test key in android/app (fine for your own phone).
       BALIMDA_KEYSTORE_BASE64: ${{ secrets.BALIMDA_KEYSTORE_BASE64 }}
     steps:
+      # The history, for what's new since the last release (version.json).
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -96,4 +99,16 @@ jobs:
             gh release create android-latest --prerelease --target "$GITHUB_SHA" --title "Najwa AI Plus for Android ${VERSION}" --notes "$notes"
           fi
           gh release upload android-latest Najwa-AI-Plus-android.apk --clobber
+          # version.json last, so the app never offers an update whose file
+          # isn't there yet (src/updates.js reads it). Only for builds signed
+          # with the release key: a phone can't update to a test-key build.
+          if [ -n "$BALIMDA_KEYSTORE_BASE64" ]; then
+            mkdir -p prev manifest
+            gh release download android-latest --pattern version.json --dir prev 2>/dev/null || true
+            cp Najwa-AI-Plus-android.apk manifest/
+            node scripts/release-manifest.js --version "$VERSION" --dir manifest --prev prev/version.json
+            gh release upload android-latest manifest/version.json --clobber
+          else
+            gh release delete-asset android-latest version.json --yes 2>/dev/null || true
+          fi
           gh release edit android-latest --title "Najwa AI Plus for Android ${VERSION}" --notes "$notes"

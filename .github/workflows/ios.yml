@@ -20,7 +20,10 @@ jobs:
     permissions:
       contents: write  # the ios-latest release
     steps:
+      # The history, for what's new since the last release (version.json).
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -67,4 +70,11 @@ jobs:
             gh release create ios-latest --prerelease --target "$GITHUB_SHA" --title "Najwa AI Plus for iPhone (latest build)" --notes "$notes"
           fi
           gh release upload ios-latest Najwa-AI-Plus-iOS-unsigned.ipa --clobber
+          # version.json last: the iPhone app reads it to say a new version is
+          # out (it can't install one itself; see src/updates.js).
+          mkdir -p prev manifest
+          gh release download ios-latest --pattern version.json --dir prev 2>/dev/null || true
+          cp Najwa-AI-Plus-iOS-unsigned.ipa manifest/
+          node scripts/release-manifest.js --version "1.0.${GITHUB_RUN_NUMBER}" --dir manifest --prev prev/version.json
+          gh release upload ios-latest manifest/version.json --clobber
           gh release edit ios-latest --notes "$notes"

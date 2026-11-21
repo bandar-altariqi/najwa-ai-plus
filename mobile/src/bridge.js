@@ -17,6 +17,7 @@ import { readLink } from '../../src/link-reader.js';
 import { chatWithTools, combineTools, TOOL_KINDS } from '../../src/tool-chat.js';
 import { connectorHub, connectorsNote, capabilitiesNote, urlOf } from '../../src/connectors.js';
 import { connectorInstaller } from '../../src/connector-installer.js';
+import { checkForUpdate } from '../../src/updates.js';
 import { httpTransport } from '../../src/mcp-client.js';
 import { localApprovals } from '../../src/local-approvals.js';
 import { textBrowser, browsingNote } from '../../src/browser-tools.js';
@@ -175,6 +176,11 @@ const computers = remoteComputers({
 // app, and other websites (for "Read links") don't allow the app's page at all.
 const NetPlugin = isNative && Capacitor.isPluginAvailable('Net') ? registerPlugin('Net') : null;
 const nativeFetch = NetPlugin ? makeNativeFetch(NetPlugin) : null;
+// Updates on Android (UpdatePlugin.java): downloads, checks and installs a
+// newer APK. The iPhone app can only open the download page.
+const UpdatePlugin = isNative && Capacitor.isPluginAvailable('Update') ? registerPlugin('Update') : null;
+let updateFound = null;
+const updateListeners = new Set();
 
 // While a reply is written, the app keeps going in the background: Android
 // with a foreground service (a notification), iPhone with the extra time it
@@ -354,6 +360,41 @@ window.balimda = {
       }
       return { count: await s.importAll(data) };
     })
+  },
+  // A newer Najwa AI Plus (src/updates.js). Only in the app on a phone.
+  updates: {
+    async check() {
+      const platform = Capacitor.getPlatform();
+      const current = isNative ? (await App.getInfo()).version : '';
+      if (!isNative || !nativeFetch) return { available: false, version: current, current, notPackaged: true };
+      const getJson = async (url) => {
+        const res = await nativeFetch(url);
+        if (!res.ok) throw new Error(res.status === 404 ? 'No release information yet.' : `HTTP ${res.status}`);
+        return res.json();
+      };
+      updateFound = await checkForUpdate({ getJson, current, platform });
+      // Without the plugin (an older app), the download page.
+      if (updateFound.available && !UpdatePlugin) updateFound = { ...updateFound, file: null };
+      return updateFound;
+    },
+    async install() {
+      const u = updateFound;
+      if (!u || !u.available) throw new Error('Check for updates first.');
+      if (!u.file || !UpdatePlugin) {
+        window.open(u.page, '_blank');
+        return { opened: true, page: true };
+      }
+      const sub = await UpdatePlugin.addListener('progress', (p) => { for (const cb of updateListeners) cb(p.value); });
+      try {
+        return await UpdatePlugin.install({ url: u.file.url, sha256: u.file.sha256 });
+      } finally {
+        sub.remove();
+      }
+    },
+    onProgress(cb) {
+      updateListeners.add(cb);
+      return () => updateListeners.delete(cb);
+    }
   },
   app: {
     // The app's language, for Android's notifications (older app: no such method).

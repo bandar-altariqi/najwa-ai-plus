@@ -201,6 +201,16 @@ contextBridge.exposeInMainWorld('balimda', {
     openDataDir: invoke('app:openDataDir'),
     legal: invoke('app:legal')
   },
+  // A newer Najwa AI Plus (src/updates.js, src/desktop-updater.js).
+  updates: {
+    check: invoke('updates:check'),
+    install: invoke('updates:install'),
+    onProgress(cb) {
+      const listener = (_e, p) => cb(p);
+      ipcRenderer.on('updates:progress', listener);
+      return () => ipcRenderer.removeListener('updates:progress', listener);
+    }
+  },
   web: {
     read: invoke('web:read')
   },

@@ -63,6 +63,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Voice chat: the microphone, and the phone's speech recognition and voices. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Updates: Najwa AI Plus installs its own newer version, after the user
+         taps Update (UpdatePlugin.java). Android asks them once to allow it. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />

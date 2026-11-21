@@ -24,6 +24,8 @@ const { readLink } = require('./src/link-reader');
 const { chatWithTools, combineTools, TOOL_KINDS } = require('./src/tool-chat');
 const { connectorHub, connectorsNote, capabilitiesNote, urlOf } = require('./src/connectors');
 const { connectorInstaller } = require('./src/connector-installer');
+const { checkForUpdate } = require('./src/updates');
+const desktopUpdater = require('./src/desktop-updater');
 const { httpTransport } = require('./src/mcp-client');
 const { stdioTransport } = require('./src/mcp-stdio');
 const { localApprovals } = require('./src/local-approvals');
@@ -785,6 +787,40 @@ function registerIpc() {
   ipcMain.handle('app:legal', (_e, which) => {
     const file = which === 'notices' ? 'THIRD-PARTY-NOTICES.md' : 'LICENSE';
     return fs.readFileSync(path.join(__dirname, file), 'utf8');
+  });
+
+  // Updates: is there a newer version (from the release's version.json), and
+  // installing it once the user says yes. Not in a copy run from the source.
+  let updateFound = null;
+  let updating = null;
+  ipcMain.handle('updates:check', async () => {
+    if (!app.isPackaged) return { available: false, version: app.getVersion(), current: app.getVersion(), notPackaged: true };
+    const getJson = async (url) => {
+      const res = await net.fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status === 404 ? 'No release information yet.' : `HTTP ${res.status}`);
+      return res.json();
+    };
+    updateFound = await checkForUpdate({ getJson, current: app.getVersion(), platform: process.platform, arch: process.arch, how: desktopUpdater.installKind() });
+    return updateFound;
+  });
+  ipcMain.handle('updates:install', async () => {
+    const u = updateFound;
+    if (!u || !u.available) throw new Error('Check for updates first.');
+    if (!u.file) {
+      await shell.openExternal(u.page);
+      return { opened: true, page: true };
+    }
+    if (!updating) {
+      updating = (async () => {
+        const file = await desktopUpdater.download(u.file, {
+          dir: path.join(app.getPath('temp'), 'najwa-ai-plus-update'),
+          fetchImpl: (url, opts) => net.fetch(url, opts),
+          onProgress: (p) => send('updates:progress', p)
+        });
+        return desktopUpdater.install(file, { quit: () => setTimeout(() => app.quit(), 300), openPath: (f) => shell.openPath(f) });
+      })().finally(() => { updating = null; });
+    }
+    return updating;
   });
 
   ipcMain.handle('backup:export', async () => {

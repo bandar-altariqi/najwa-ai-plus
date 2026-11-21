@@ -96,6 +96,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The history, for what's new since the last release (version.json).
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
@@ -125,6 +129,14 @@ jobs:
             gh release create desktop-latest --prerelease --target "$GITHUB_SHA" --title "Najwa AI Plus for Windows, macOS and Linux (latest build)" --notes "$notes"
           fi
           gh release upload desktop-latest out/* --clobber
+          # version.json last, so the app never offers an update whose files
+          # aren't there yet (src/updates.js reads it).
+          mkdir -p prev
+          gh release download desktop-latest --pattern version.json --dir prev 2>/dev/null || true
+          mkdir manifest
+          cp out/* manifest/
+          node scripts/release-manifest.js --version "$VERSION" --dir manifest --prev prev/version.json
+          gh release upload desktop-latest manifest/version.json --clobber
           # Files under older names (Balimda, or Najwa AI's before Plus had its own).
           gh release view desktop-latest --json assets --jq '.assets[].name' | { grep -E '^Balimda-|^Najwa-AI-(Windows|macOS|Linux)' || true; } | while read -r old; do
             gh release delete-asset desktop-latest "$old" --yes || true

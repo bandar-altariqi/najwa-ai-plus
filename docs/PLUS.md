@@ -131,6 +131,19 @@ tools work in the same reply. Only a package launcher (npx, uvx, bunx, pnpx)
 with plain arguments, or an https address; the phone adds by address only. Keys
 are added by the user in Settings, never in the chat.
 
+Updates (`src/updates.js`): each release (desktop-latest, android-latest,
+ios-latest) also gets a `version.json` (`scripts/release-manifest.js`) with
+the version, each file's SHA-256 and what's new, uploaded after the files. The
+app checks it 20 seconds after it starts and every 6 hours (Settings → About
+turns that off, or checks by hand), asks first, and on **Update** downloads the
+file and checks its SHA-256. Windows runs the installer silently and opens
+again; macOS replaces the app and opens it (or opens the disk image when it
+can't write there); a Linux AppImage replaces itself, a .deb opens in the
+software installer (`src/desktop-updater.js`). Android downloads the APK and
+opens Android's installer (`UpdatePlugin.java`; Android asks once to allow
+"Install unknown apps"); only builds signed with the release key get a
+version.json. The iPhone app only says a new version is out and opens the page.
+
 ## What's next
 
 1. **Try it on real devices**: the Plus phone app with a computer (Android APK
