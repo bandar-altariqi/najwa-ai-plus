@@ -34,7 +34,7 @@ function browserSession() {
 }
 
 // An engine for src/browser-scripted.js: a hidden window.
-function desktopEngine() {
+function desktopEngine({ ses = null } = {}) {
   let win = null;
 
   const open = () => {
@@ -44,7 +44,7 @@ function desktopEngine() {
       width: 1280,
       height: 900,
       webPreferences: {
-        session: browserSession(),
+        session: ses || browserSession(),
         offscreen: true, // drawn even though it's never shown, for screenshots
         sandbox: true,
         contextIsolation: true,
@@ -101,6 +101,8 @@ function desktopEngine() {
   };
 }
 
-const desktopBrowser = (opts) => scriptedBrowser(desktopEngine(), opts);
+// `ses`: browse on another session instead of the private one (a work
+// drive's, where the user signed in: src/work-drive.js).
+const desktopBrowser = ({ ses = null, ...opts } = {}) => scriptedBrowser(desktopEngine({ ses }), opts);
 
 module.exports = { desktopBrowser };

@@ -231,7 +231,8 @@ async function phoneId() {
 // How this phone is called on other devices ("Replying on Android phone…").
 const phoneName = () => (Capacitor.getPlatform() === 'ios' ? 'iPhone' : Capacitor.getPlatform() === 'android' ? 'Android phone' : 'Browser');
 const phoneOrigin = async () => ({ id: await phoneId(), name: `your ${Capacitor.getPlatform() === 'ios' ? 'iPhone' : 'phone'}`, computer: false });
-const phoneConnectors = (list) => (list || []).filter((c) => c.enabled !== false && c.kind !== 'command');
+// (Programs and work drives are read on a computer.)
+const phoneConnectors = (list) => (list || []).filter((c) => c.enabled !== false && c.kind !== 'command' && c.kind !== 'drive');
 
 const providers = {
   onDevice: {

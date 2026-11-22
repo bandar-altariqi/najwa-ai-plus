@@ -217,6 +217,11 @@ contextBridge.exposeInMainWorld('balimda', {
   connectors: {
     test: invoke('connectors:test')
   },
+  // Work drives (src/work-drive.js): signing in happens on the drive's page.
+  drive: {
+    signIn: invoke('drive:signIn'),
+    signOut: invoke('drive:signOut')
+  },
   ai: {
     models: invoke('ai:models'),
     chat: invoke('ai:chat'),

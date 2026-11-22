@@ -2,7 +2,7 @@
 // Licensed under the Najwa AI License (see LICENSE): non-commercial use only;
 // keep the Najwa AI name and the "Najwa AI by Bandar Altariqi" credit; no rebranding.
 
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog, safeStorage, nativeTheme, screen, net, systemPreferences, powerSaveBlocker, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, safeStorage, nativeTheme, screen, net, session, systemPreferences, powerSaveBlocker, Notification } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { Storage, DEFAULT_SETTINGS } = require('./src/storage');
@@ -24,6 +24,7 @@ const { readLink } = require('./src/link-reader');
 const { chatWithTools, combineTools, TOOL_KINDS } = require('./src/tool-chat');
 const { connectorHub, connectorsNote, capabilitiesNote, urlOf } = require('./src/connectors');
 const { connectorInstaller } = require('./src/connector-installer');
+const { driveUrl, detectDrive, driveToolset, driveNote } = require('./src/work-drive');
 const { checkForUpdate } = require('./src/updates');
 const desktopUpdater = require('./src/desktop-updater');
 const { httpTransport } = require('./src/mcp-client');
@@ -300,6 +301,73 @@ const connectors = connectorHub({
 });
 const approvals = localApprovals();
 
+// Work drives (src/work-drive.js): each has its own browser session, kept on
+// disk, where the user signs in on the drive's own page (work email and
+// password, Nafath…). The app never sees the password; it only uses the
+// session to read the drive.
+const driveSessions = new Map();
+function driveSession(c) {
+  const id = String(c.id).replace(/[^A-Za-z0-9_-]/g, '');
+  if (!driveSessions.has(id)) {
+    const ses = session.fromPartition(`persist:drive-${id}`);
+    ses.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    ses.setPermissionCheckHandler(() => false);
+    ses.on('will-download', (e) => e.preventDefault());
+    ses.setUserAgent(ses.getUserAgent().replace(/\s(Electron|najwa-ai|Najwa AI|balimda)\/\S+/gi, ''));
+    driveSessions.set(id, ses);
+  }
+  return driveSessions.get(id);
+}
+const driveFetch = (c) => (url, opts = {}) => driveSession(c).fetch(url, { ...opts, credentials: 'include', cache: 'no-store' });
+
+// Opens the drive's page in a window for the user to sign in; resolves with
+// what the drive is (detectDrive) once they close it.
+function driveSignIn(c) {
+  const url = driveUrl(c.url);
+  if (!url) return Promise.resolve({ ok: false, error: 'Enter the drive\'s address (https://…).' });
+  return new Promise((resolve) => {
+    const win = new BrowserWindow({
+      width: 1100,
+      height: 800,
+      parent: mainWindow || undefined,
+      title: tr(`Sign in to ${c.name || 'the drive'}, then close this window`),
+      autoHideMenuBar: true,
+      webPreferences: { session: driveSession(c), sandbox: true, contextIsolation: true, nodeIntegration: false }
+    });
+    win.on('page-title-updated', (e) => e.preventDefault());   // keep the instruction in the title
+    // A sign-in page that opens a window (Nafath, the company's sign-in) opens here.
+    win.webContents.setWindowOpenHandler(({ url: next }) => {
+      if (/^https:/.test(next)) setImmediate(() => !win.isDestroyed() && win.loadURL(next).catch(() => {}));
+      return { action: 'deny' };
+    });
+    win.webContents.on('will-navigate', (e, next) => { if (!/^https:/.test(next)) e.preventDefault(); });
+    // Signed in to a drive that can be read directly: close by itself.
+    const check = setInterval(async () => {
+      const info = await detectDrive(driveFetch(c), url).catch(() => null);
+      if (info && info.signedIn && !win.isDestroyed()) win.close();
+    }, 4000);
+    win.on('closed', async () => {
+      clearInterval(check);
+      resolve(await driveStatus(c));
+    });
+    win.loadURL(url).catch(() => {});
+  });
+}
+
+// For Settings → Connectors: signed in, and how it's read.
+async function driveStatus(c) {
+  const url = driveUrl(c.url);
+  if (!url) return { ok: false, error: 'Enter the drive\'s address (https://…).' };
+  try {
+    const info = await detectDrive(driveFetch(c), url);
+    if (info.signedIn === false) return { ok: false, error: 'Not signed in: press Sign in.' };
+    const set = driveToolset({ drive: { ...c, url }, info });
+    return { ok: true, server: info.mode === 'dav' ? `${info.product}${info.user ? ` · ${info.user}` : ''}` : tr('read through its pages'), tools: set.defs.map((d) => d.name.split('__').pop()) };
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
+  }
+}
+
 // ---- The agent (Najwa AI Plus): a chat with a project folder ----------------
 // Checkpoints (undo) live in the data folder; background commands last while
 // the app runs.
@@ -481,6 +549,7 @@ async function runChatInner(providerId, req, onDelta, signal, onInfo) {
     const sets = [];
     let system = request.system;
     const browser = req.browse ? desktopBrowser() : null;
+    const driveSets = [];
     try {
       if (agentSpec) {
         const origin = { id: await computerId(), name: computerName(), computer: true };
@@ -493,7 +562,23 @@ async function runChatInner(providerId, req, onDelta, signal, onInfo) {
         sets.push(browser);
         system = browsingNote(system, true);
       }
-      const mine = req.connectors ? (settings.connectors || []).filter((c) => c.enabled !== false) : [];
+      const enabled = req.connectors ? (settings.connectors || []).filter((c) => c.enabled !== false) : [];
+      const mine = enabled.filter((c) => c.kind !== 'drive');
+      // Work drives: read only, on the session the user signed in with.
+      const drives = [];
+      for (const c of enabled.filter((d) => d.kind === 'drive' && driveUrl(d.url))) {
+        const drive = { ...c, url: driveUrl(c.url) };
+        const info = await detectDrive(driveFetch(c), drive.url).catch(() => ({ signedIn: null, mode: 'web' }));
+        if (info.signedIn === false) {
+          system = `${system ? `${system}\n\n` : ''}The user's work drive "${c.name}" is signed out: if they ask about its files, tell them to sign in again (Settings → Connectors → ${c.name} → Sign in).`;
+          continue;
+        }
+        const set = driveToolset({ drive, info, fetchFn: driveFetch(c), browser: info.mode === 'web' ? desktopBrowser({ ses: driveSession(c) }) : null });
+        sets.push(set);
+        drives.push(drive);
+        driveSets.push(set);
+      }
+      system = driveNote(system, drives);
       const connectorOrigin = { id: await computerId(), name: computerName(), computer: true };
       const connectorAsk = approvals.asker(onInfo, signal, connectorOrigin);
       if (mine.length) {
@@ -537,6 +622,7 @@ async function runChatInner(providerId, req, onDelta, signal, onInfo) {
       }
     } finally {
       if (browser) browser.close();
+      for (const d of driveSets) d.close();
     }
   }
   return provider.impl.streamChat(cfg, request, onDelta, signal, onInfo);
@@ -938,7 +1024,13 @@ function registerIpc() {
   ipcMain.handle('web:read', (_e, url) => readLink(url));
 
   // Settings → Connectors: "Test" connects and lists the tools.
-  ipcMain.handle('connectors:test', (_e, c) => connectors.test(c));
+  ipcMain.handle('connectors:test', (_e, c) => (c && c.kind === 'drive' ? driveStatus(c) : connectors.test(c)));
+  // Work drives: sign in on the drive's own page, or sign out (forget its session).
+  ipcMain.handle('drive:signIn', (_e, c) => driveSignIn(c));
+  ipcMain.handle('drive:signOut', async (_e, c) => {
+    await driveSession(c).clearStorageData();
+    return { ok: true };
+  });
 
   ipcMain.handle('ai:approve', async (_e, providerId, _model, payload) => answeredHere(payload, await approveOn(providerId, payload)));
 
