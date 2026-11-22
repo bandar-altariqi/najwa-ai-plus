@@ -88,6 +88,14 @@ export const CATALOG = [
     url: 'https://huggingface.co/zai-org/glm-edge-4b-chat-gguf/resolve/main/ggml-model-Q4_0.gguf'
   },
   {
+    // Open (Apache 2.0) Arabic-first model from SDAIA and HUMAIN. Checked with
+    // this engine: answers in Arabic and ends its turn. It doesn't use tools.
+    name: 'ALLaM · 7B',
+    note: 'Saudi Arabic model (SDAIA) · 10 GB+ RAM, slow',
+    size: 4.02e9,
+    url: 'https://huggingface.co/bartowski/ALLaM-AI_ALLaM-7B-Instruct-preview-GGUF/resolve/main/ALLaM-AI_ALLaM-7B-Instruct-preview-Q4_0.gguf'
+  },
+  {
     name: 'DeepSeek R1 · 8B',
     note: 'DeepSeek\'s best small reasoner · 12 GB+ RAM, slow',
     size: 4.79e9,

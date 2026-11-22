@@ -556,6 +556,7 @@
     'Zhipu GLM, smarter · 8 GB+ RAM': 'Zhipu GLM، أذكى · 8 جيجابايت RAM أو أكثر',
     'DeepSeek\'s best small reasoner · 12 GB+ RAM, slow': 'أفضل نموذج تفكير صغير من DeepSeek · 12 جيجابايت RAM أو أكثر، بطيء',
     'Zhipu GLM, strongest here · 12 GB+ RAM, slow': 'Zhipu GLM، الأقوى هنا · 12 جيجابايت RAM أو أكثر، بطيء',
+    'Saudi Arabic model (SDAIA) · 10 GB+ RAM, slow': 'نموذج عربي سعودي (سدايا) · 10 جيجابايت RAM أو أكثر، بطيء',
 
     // ---- errors that reach the screen -----------------------------------------------------
     'Unknown provider: {}': 'مزوّد غير معروف: {}',
