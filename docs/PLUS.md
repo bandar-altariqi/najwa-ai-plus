@@ -144,22 +144,6 @@ opens Android's installer (`UpdatePlugin.java`; Android asks once to allow
 "Install unknown apps"); only builds signed with the release key get a
 version.json. The iPhone app only says a new version is out and opens the page.
 
-Work drives (`src/work-drive.js`; Settings → Connectors → "Add a work drive",
-on computers): a workplace drive such as Deem Drive (drive.deem.sa). Sign in
-opens the drive's own page in a window on its own saved session
-(`persist:drive-<id>`), where the user signs in as usual (work email and
-password, Nafath, the company's sign-in); the app never sees the password, and
-a drive it can read closes the window by itself once signed in. A Nextcloud,
-ownCloud or WebDAV drive is read directly: list a folder, find files by name
-(Arabic matched the way people write it), read text, Word, Excel and
-PowerPoint files. Any other drive is browsed in its own pages, only on its
-address. Read only: nothing is uploaded, changed or deleted. When the session
-ends, the model tells the user to sign in again. Not on phones yet. Checked
-against a stand-in Nextcloud with DeepSeek: it found and read two Word
-policies and answered in Arabic, naming each file. drive.deem.sa can't be
-reached from outside Saudi Arabia, so which kind it is gets found on the
-user's computer.
-
 ## What's next
 
 1. **Try it on real devices**: the Plus phone app with a computer (Android APK

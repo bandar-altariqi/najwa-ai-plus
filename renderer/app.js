@@ -4158,7 +4158,7 @@ function openSettings(tab = 'general') {
               status.className = 'status';
               await api.settings.save(S.settings);
               const r = await api.connectors.test(c).catch((err) => ({ ok: false, error: errorText(err) }));
-              status.textContent = r.ok ? (c.kind === 'drive' ? `Signed in · ${r.server}` : `Connected · ${r.tools.length} tool${r.tools.length === 1 ? '' : 's'}`) : r.error;
+              status.textContent = r.ok ? `Connected · ${r.tools.length} tool${r.tools.length === 1 ? '' : 's'}` : r.error;
               status.className = `status ${r.ok ? 'ok' : 'bad'}`;
             }
           });
@@ -4172,51 +4172,6 @@ function openSettings(tab = 'general') {
               draw();
             }
           });
-          // A work drive (src/work-drive.js): signed in on its own page, read only.
-          if (c.kind === 'drive') {
-            const show = (r) => {
-              status.textContent = r.ok ? `Signed in · ${r.server}` : r.error;
-              status.className = `status ${r.ok ? 'ok' : 'bad'}`;
-            };
-            const signIn = h('button', {
-              class: 'btn primary',
-              text: 'Sign in',
-              onclick: async () => {
-                status.textContent = 'Sign in in the window that opened, then close it.';
-                status.className = 'status';
-                await api.settings.save(S.settings);
-                show(await api.drive.signIn(c).catch((err) => ({ ok: false, error: errorText(err) })));
-              }
-            });
-            const signOut = h('button', {
-              class: 'btn',
-              text: 'Sign out',
-              onclick: async () => {
-                await api.drive.signOut(c);
-                show({ ok: false, error: 'Signed out' });
-              }
-            });
-            const forget = h('button', {
-              class: 'btn danger',
-              text: 'Remove',
-              onclick: async () => {
-                if (!(await confirmBox(`Remove the work drive "${c.name}"? You're signed out of it on this computer.`))) return;
-                await api.drive.signOut(c).catch(() => {});
-                s.connectors.splice(i, 1);
-                changed();
-                draw();
-              }
-            });
-            test.textContent = 'Check';
-            return h('div', { class: 'provider-card' },
-              h('h4', {}, `🗂️ ${c.name}`, status),
-              check('Enabled', c, 'enabled'),
-              field('Name', bind(h('input', { class: 'input', value: c.name }), c, 'name', (v) => v.trim() || 'Work drive')),
-              field('Address', bind(h('input', { class: 'input', dir: 'ltr', value: c.url || '', placeholder: 'https://drive.example.sa' }), c, 'url', (v) => v.trim()),
-                'Its page in the browser, e.g. drive.deem.sa. Sign in opens it in a window: sign in there as usual (work email and password, Nafath…). Najwa AI never sees your password.'),
-              h('div', { class: 'help', text: 'Read only: models can list, find and read its files (text, Word, Excel, PowerPoint), and never upload, change or delete anything. Ask your IT or cybersecurity team before using it with work files.' }),
-              h('div', { class: 'field-row' }, signIn, test, signOut, forget));
-          }
           const token = c.kind !== 'command' ? field(c.kind === 'github' ? 'GitHub token' : 'Token (optional)',
             bind(h('input', { class: 'input', type: 'password', value: c.token || '', placeholder: c.kind === 'github' ? 'github_pat_…' : 'Sent as "Authorization: Bearer …"', autocomplete: 'off' }), c, 'token', (v) => v.trim()),
             c.kind === 'github' ? 'Kept on this device (encrypted on computers) and never synced.' : null) : null;
@@ -4250,8 +4205,7 @@ function openSettings(tab = 'general') {
           h('div', { class: 'field-row' },
             s.connectors.some((c) => c.kind === 'github') ? null : h('button', { class: 'btn primary', text: '＋ Add GitHub', onclick: () => add({ kind: 'github', name: 'GitHub' }) }),
             h('button', { class: 'btn', text: '＋ Add by address', onclick: () => add({ kind: 'url', name: 'Connector', url: '' }) }),
-            S.info.mobile ? null : h('button', { class: 'btn', text: '＋ Add a program on this computer', onclick: () => add({ kind: 'command', name: 'Local connector', command: '', args: [] }) }),
-            S.info.mobile ? null : h('button', { class: 'btn', text: '＋ Add a work drive', onclick: () => add({ kind: 'drive', name: 'Work drive', url: '' }) })),
+            S.info.mobile ? null : h('button', { class: 'btn', text: '＋ Add a program on this computer', onclick: () => add({ kind: 'command', name: 'Local connector', command: '', args: [] }) })),
           h('p', { class: 'help', text: S.info.mobile
             ? 'Connectors here are for this phone\'s models. When the phone uses a computer\'s models, the computer\'s connectors are used.'
             : 'Connectors here are also used when your phone uses this computer\'s models.' }));
